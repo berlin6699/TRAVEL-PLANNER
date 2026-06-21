@@ -1,10 +1,15 @@
 import os
+from io import BytesIO
 from pathlib import Path
 
+from pypdf import PdfWriter
+
 TEST_DB = Path(__file__).parent / "test_travel.db"
+TEST_UPLOADS = Path(__file__).parent / "test_uploads"
 if TEST_DB.exists():
     TEST_DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
+os.environ["UPLOAD_DIR"] = str(TEST_UPLOADS)
 
 from fastapi.testclient import TestClient
 
@@ -50,6 +55,29 @@ def test_full_api_flow():
         })
         assert foreign_expense.status_code == 201
         assert foreign_expense.json()["currency"] == "GBP"
+
+        writer = PdfWriter()
+        writer.add_blank_page(width=300, height=200)
+        pdf_buffer = BytesIO()
+        writer.write(pdf_buffer)
+        reservation_id = client.get("/api/reservations").json()[0]["id"]
+        attachment = client.post(
+            f"/api/reservations/{reservation_id}/attachments",
+            files={"file": ("train-ticket.pdf", pdf_buffer.getvalue(), "application/pdf")},
+        )
+        assert attachment.status_code == 201
+        attachment_id = attachment.json()["id"]
+        assert attachment.json()["original_name"] == "train-ticket.pdf"
+        assert len(client.get(f"/api/reservation-attachments?reservation_id={reservation_id}").json()) == 1
+        opened = client.get(f"/api/reservation-attachments/{attachment_id}/file")
+        assert opened.status_code == 200
+        assert opened.content.startswith(b"%PDF-")
+        invalid_pdf = client.post(
+            f"/api/reservations/{reservation_id}/attachments",
+            files={"file": ("fake.pdf", b"not-a-pdf", "application/pdf")},
+        )
+        assert invalid_pdf.status_code == 400
+        assert client.delete(f"/api/reservation-attachments/{attachment_id}").status_code == 204
 
         exported = client.get("/api/export")
         assert exported.status_code == 200
@@ -110,3 +138,7 @@ def teardown_module():
     engine.dispose()
     if TEST_DB.exists():
         TEST_DB.unlink()
+    if TEST_UPLOADS.exists():
+        for file in TEST_UPLOADS.iterdir():
+            file.unlink()
+        TEST_UPLOADS.rmdir()

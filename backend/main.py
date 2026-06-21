@@ -1,24 +1,40 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
+from io import BytesIO
+import os
+from pathlib import Path
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pypdf import PdfReader
 from sqlalchemy import delete, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import crud
 from database import Base, SessionLocal, engine, get_db
-from models import City, Destination, Expense, Inspiration, ItineraryItem, Place, Reservation, RouteLeg, TripInfo
+from models import City, Destination, Expense, Inspiration, ItineraryItem, Place, Reservation, ReservationAttachment, RouteLeg, TripInfo
 from schemas import (
     CityCreate, CityRead, DestinationCreate, DestinationRead, ExpenseCreate, ExpenseRead, ExportPayload, ImportResult,
     InspirationCreate, InspirationRead, ItineraryCreate, ItineraryRead, PlaceCreate, PlaceRead,
-    ReservationCreate, ReservationRead, RouteLegCreate, RouteLegRead, TripBase, TripRead,
+    ReservationAttachmentRead, ReservationCreate, ReservationRead, RouteLegCreate, RouteLegRead, TripBase, TripRead,
 )
 from seed import migrate_existing_city_data, seed_database
 
 
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).resolve().parent / "uploads"))
+MAX_PDF_BYTES = 15 * 1024 * 1024
+
+
+def remove_upload_files(stored_names: list[str]) -> None:
+    for stored_name in stored_names:
+        (UPLOAD_DIR / stored_name).unlink(missing_ok=True)
+
+
 def initialize_database() -> None:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     # create_all 不会修改既有 SQLite 表；这里为旧数据库做轻量、幂等迁移。
     table_additions = {
@@ -97,7 +113,10 @@ def update_trip_by_id(item_id: int, payload: TripBase, db: Session = Depends(get
 
 @app.delete("/api/trips/{item_id}", status_code=204)
 def delete_trip_by_id(item_id: int, db: Session = Depends(get_db)):
-    crud.delete_item(db, crud.get_or_404(db, TripInfo, item_id))
+    trip = crud.get_or_404(db, TripInfo, item_id)
+    stored_names = list(db.scalars(select(ReservationAttachment.stored_name).join(Reservation).where(Reservation.trip_id == item_id)))
+    crud.delete_item(db, trip)
+    remove_upload_files(stored_names)
     return Response(status_code=204)
 
 
@@ -231,7 +250,73 @@ def update_reservation(item_id: int, payload: ReservationCreate, db: Session = D
 
 @app.delete("/api/reservations/{item_id}", status_code=204)
 def delete_reservation(item_id: int, db: Session = Depends(get_db)):
-    crud.delete_item(db, crud.get_or_404(db, Reservation, item_id))
+    reservation = crud.get_or_404(db, Reservation, item_id)
+    stored_names = list(db.scalars(select(ReservationAttachment.stored_name).where(ReservationAttachment.reservation_id == item_id)))
+    crud.delete_item(db, reservation)
+    remove_upload_files(stored_names)
+    return Response(status_code=204)
+
+
+@app.get("/api/reservation-attachments", response_model=list[ReservationAttachmentRead])
+def get_reservation_attachments(trip_id: int | None = None, reservation_id: int | None = None, db: Session = Depends(get_db)):
+    query = select(ReservationAttachment).join(Reservation)
+    if trip_id:
+        query = query.where(Reservation.trip_id == trip_id)
+    if reservation_id:
+        query = query.where(ReservationAttachment.reservation_id == reservation_id)
+    return list(db.scalars(query.order_by(ReservationAttachment.uploaded_at.desc(), ReservationAttachment.id.desc())))
+
+
+@app.post("/api/reservations/{reservation_id}/attachments", response_model=ReservationAttachmentRead, status_code=201)
+async def upload_reservation_attachment(reservation_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    crud.get_or_404(db, Reservation, reservation_id)
+    original_name = Path(file.filename or "ticket.pdf").name
+    if not original_name.lower().endswith(".pdf"):
+        raise HTTPException(400, "只支持上传 PDF 文件")
+    content = await file.read(MAX_PDF_BYTES + 1)
+    if len(content) > MAX_PDF_BYTES:
+        raise HTTPException(413, "PDF 文件不能超过 15 MB")
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(400, "文件不是有效的 PDF")
+    try:
+        reader = PdfReader(BytesIO(content))
+        if len(reader.pages) < 1:
+            raise ValueError("PDF 没有页面")
+    except Exception as exc:
+        raise HTTPException(400, "PDF 文件损坏或无法读取") from exc
+    stored_name = f"{uuid4().hex}.pdf"
+    target = UPLOAD_DIR / stored_name
+    try:
+        target.write_bytes(content)
+        attachment = ReservationAttachment(
+            reservation_id=reservation_id, original_name=original_name, stored_name=stored_name,
+            mime_type="application/pdf", size_bytes=len(content),
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+        return attachment
+    except Exception:
+        db.rollback()
+        target.unlink(missing_ok=True)
+        raise
+
+
+@app.get("/api/reservation-attachments/{attachment_id}/file")
+def view_reservation_attachment(attachment_id: int, db: Session = Depends(get_db)):
+    attachment = crud.get_or_404(db, ReservationAttachment, attachment_id)
+    path = UPLOAD_DIR / attachment.stored_name
+    if not path.is_file():
+        raise HTTPException(404, "PDF 文件不存在")
+    return FileResponse(path, media_type="application/pdf", filename=attachment.original_name, content_disposition_type="inline")
+
+
+@app.delete("/api/reservation-attachments/{attachment_id}", status_code=204)
+def delete_reservation_attachment(attachment_id: int, db: Session = Depends(get_db)):
+    attachment = crud.get_or_404(db, ReservationAttachment, attachment_id)
+    stored_name = attachment.stored_name
+    crud.delete_item(db, attachment)
+    remove_upload_files([stored_name])
     return Response(status_code=204)
 
 
@@ -366,6 +451,7 @@ def export_data(db: Session = Depends(get_db)):
 
 @app.post("/api/import", response_model=ImportResult)
 def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
+    old_uploads = list(db.scalars(select(ReservationAttachment.stored_name)))
     trips_to_import = payload.trips or [payload.trip]
     trip_ids = {item.id for item in trips_to_import}
     reservation_ids = {item.id for item in payload.reservations}
@@ -420,7 +506,7 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
         if item.reservation_id and item.reservation_id not in reservation_ids:
             raise HTTPException(400, f"消费 {item.id} 引用了不存在的预约")
     try:
-        for model in (Expense, RouteLeg, ItineraryItem, Inspiration, Reservation, Place, City, Destination, TripInfo):
+        for model in (Expense, RouteLeg, ItineraryItem, Inspiration, ReservationAttachment, Reservation, Place, City, Destination, TripInfo):
             db.execute(delete(model))
         db.add_all([TripInfo(**item.model_dump()) for item in trips_to_import])
         db.flush()
@@ -440,6 +526,7 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
         db.add_all([RouteLeg(**item.model_dump()) for item in payload.route_legs])
         db.flush()
         db.commit()
+        remove_upload_files(old_uploads)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(400, "导入数据存在重复 ID 或无效关联") from exc
@@ -457,9 +544,11 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
 
 @app.delete("/api/reset", status_code=204)
 def reset_data(db: Session = Depends(get_db)):
-    for model in (Expense, RouteLeg, ItineraryItem, Inspiration, Reservation, Place, City, Destination, TripInfo):
+    old_uploads = list(db.scalars(select(ReservationAttachment.stored_name)))
+    for model in (Expense, RouteLeg, ItineraryItem, Inspiration, ReservationAttachment, Reservation, Place, City, Destination, TripInfo):
         db.execute(delete(model))
     today = date.today()
     db.add(TripInfo(id=1, name="我的旅行", start_date=today, end_date=today, total_budget=0, currency="CNY"))
     db.commit()
+    remove_upload_files(old_uploads)
     return Response(status_code=204)

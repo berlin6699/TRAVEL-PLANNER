@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, JSON, Numeric, String, Text, Time
+from datetime import datetime
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -84,6 +86,18 @@ class Reservation(Base):
     map_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id", ondelete="SET NULL"), nullable=True, index=True)
+
+
+class ReservationAttachment(Base):
+    __tablename__ = "reservation_attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reservation_id: Mapped[int] = mapped_column(ForeignKey("reservations.id", ondelete="CASCADE"), index=True)
+    original_name: Mapped[str] = mapped_column(String(255))
+    stored_name: Mapped[str] = mapped_column(String(80), unique=True)
+    mime_type: Mapped[str] = mapped_column(String(80), default="application/pdf")
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Inspiration(Base):

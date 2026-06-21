@@ -4,6 +4,7 @@ backend/.venv/
 backend/__pycache__/
 backend/.pytest_cache/
 backend/travel_planner.db
+backend/uploads/
 backend/tests/test_travel.db
 *.pyc
 .DS_Store

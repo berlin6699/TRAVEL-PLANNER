@@ -27,6 +27,10 @@ export interface Reservation {
   order_number: string | null; location: string | null; note: string | null; booking_url: string | null
   map_url: string | null; image_url: string | null; city_id: number | null
 }
+export interface ReservationAttachment {
+  id: number; reservation_id: number; original_name: string; mime_type: string
+  size_bytes: number; uploaded_at: string
+}
 export interface Inspiration {
   id: number; trip_id: number; title: string; platform: PlatformType; url: string; tags: string[]; related_place: string | null
   note: string | null; image_url: string | null; favorite: boolean

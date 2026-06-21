@@ -6,6 +6,7 @@
 - 日程、预约和地点中的地图可在当前页面弹窗预览，同时保留外部地图链接作为兼容兜底。
 - 支持创建和切换多个独立旅程；每个旅程按“国家 / 地区 → 城市 → 地点 / 日程 / 预约”组织。
 - 城市与路线页使用 OpenStreetMap 交互底图标出地点相对位置；路线支持步行、公交、驾车、火车、大巴、飞机等方案，并可关联自己的交通预约。
+- 预约可上传多个车票、景点门票或确认单 PDF；文件经过格式与大小校验后保存在本地持久化存储中。
 
 ## 使用 Docker 启动（推荐）
 
@@ -34,6 +35,8 @@ docker compose up -d
 ```
 
 SQLite 数据保存在名为 `travel-planner-data` 的 Docker 卷中。`docker compose down`、更新镜像或重建容器都不会删除它。只有明确执行下面的命令才会连同数据库一起删除：
+
+预约 PDF 位于同一个 Docker 卷的 `/data/uploads`。当前 JSON 导出包含结构化行程数据，但不包含 PDF 二进制文件；完整迁移 Docker 数据时需要同时备份 `travel-planner-data` 卷。
 
 ```powershell
 docker compose down -v

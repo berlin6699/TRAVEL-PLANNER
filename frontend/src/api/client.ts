@@ -1,4 +1,4 @@
-import type { City, Destination, Expense, ExportPayload, Inspiration, ItineraryItem, NewItem, Place, Reservation, RouteLeg, Trip } from '../types'
+import type { City, Destination, Expense, ExportPayload, Inspiration, ItineraryItem, NewItem, Place, Reservation, ReservationAttachment, RouteLeg, Trip } from '../types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '')
 
@@ -9,7 +9,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+    headers: { ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
   })
   if (!response.ok) {
     let message = '请求失败，请稍后重试'
@@ -44,6 +44,12 @@ export const api = {
   cities: resource<City>('/cities'),
   itinerary: resource<ItineraryItem>('/itinerary'),
   reservations: resource<Reservation>('/reservations'),
+  reservationAttachments: {
+    list: (tripId: number) => request<ReservationAttachment[]>(`/reservation-attachments?trip_id=${tripId}`),
+    upload: (reservationId: number, file: File) => { const form=new FormData();form.append('file',file);return request<ReservationAttachment>(`/reservations/${reservationId}/attachments`,{method:'POST',body:form}) },
+    remove: (id: number) => request<void>(`/reservation-attachments/${id}`,{method:'DELETE'}),
+    fileUrl: (id: number) => `${BASE_URL}/reservation-attachments/${id}/file`,
+  },
   inspirations: resource<Inspiration>('/inspirations'),
   places: resource<Place>('/places'),
   routeLegs: resource<RouteLeg>('/route-legs'),

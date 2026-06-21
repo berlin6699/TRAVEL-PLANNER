@@ -167,6 +167,15 @@ class ReservationRead(ReservationBase):
     id: int
 
 
+class ReservationAttachmentRead(ORMModel):
+    id: int
+    reservation_id: int
+    original_name: str
+    mime_type: str
+    size_bytes: int
+    uploaded_at: datetime
+
+
 class InspirationBase(ORMModel):
     trip_id: int = 1
     title: str = Field(min_length=1, max_length=160)
