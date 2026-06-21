@@ -1,0 +1,48 @@
+import type { City, Expense, ExportPayload, Inspiration, ItineraryItem, NewItem, Place, Reservation, RouteLeg, Trip } from '../types'
+
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '')
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number) { super(message) }
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+  })
+  if (!response.ok) {
+    let message = '请求失败，请稍后重试'
+    try {
+      const body = await response.json()
+      message = typeof body.detail === 'string' ? body.detail : body.detail?.[0]?.msg || message
+    } catch { /* keep fallback */ }
+    throw new ApiError(message, response.status)
+  }
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
+}
+
+const resource = <T extends { id: number }>(path: string) => ({
+  list: () => request<T[]>(path),
+  create: (data: NewItem<T>) => request<T>(path, { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: NewItem<T>) => request<T>(`${path}/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: number) => request<void>(`${path}/${id}`, { method: 'DELETE' }),
+})
+
+export const api = {
+  trip: {
+    get: () => request<Trip>('/trip'),
+    update: (data: Omit<Trip, 'id'>) => request<Trip>('/trip', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  cities: resource<City>('/cities'),
+  itinerary: resource<ItineraryItem>('/itinerary'),
+  reservations: resource<Reservation>('/reservations'),
+  inspirations: resource<Inspiration>('/inspirations'),
+  places: resource<Place>('/places'),
+  routeLegs: resource<RouteLeg>('/route-legs'),
+  expenses: resource<Expense>('/expenses'),
+  export: () => request<ExportPayload>('/export'),
+  import: (data: ExportPayload) => request<{ message: string }>('/import', { method: 'POST', body: JSON.stringify(data) }),
+  reset: () => request<void>('/reset', { method: 'DELETE' }),
+}

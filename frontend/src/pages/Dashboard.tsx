@@ -1,0 +1,32 @@
+import { CalendarCheck, CalendarClock, CircleDollarSign, Clock3, Lightbulb, MapPin, NotebookTabs, Plus, ReceiptText } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { api } from '../api/client'
+import { Badge, EmptyState, ErrorBanner, LinkButton, Loading, StatCard } from '../components/UI'
+import { useLoad } from '../hooks/useLoad'
+import { formatDate, formatMoney, tripStatus } from '../utils'
+
+export default function Dashboard() {
+  const {data,loading,error}=useLoad(async()=>{const [trip,cities,itinerary,reservations,inspirations,expenses]=await Promise.all([api.trip.get(),api.cities.list(),api.itinerary.list(),api.reservations.list(),api.inspirations.list(),api.expenses.list()]);return {trip,cities,itinerary,reservations,inspirations,expenses}})
+  if(loading)return <Loading/>; if(!data)return <ErrorBanner message={error}/>
+  const {trip,cities,itinerary,reservations,inspirations,expenses}=data
+  const baseExpenses=expenses.filter(x=>(x.currency||'CNY')===trip.currency), foreignExpenses=expenses.length-baseExpenses.length
+  const spent=baseExpenses.reduce((s,x)=>s+Number(x.amount),0), percent=trip.total_budget?Math.min(100,spent/Number(trip.total_budget)*100):0
+  const today=new Date().toISOString().slice(0,10), upcoming=itinerary.find(x=>x.date>=today)
+  const todayItems=itinerary.filter(x=>x.date===today), pending=reservations.filter(x=>x.status==='待预约'), booked=reservations.filter(x=>x.status==='已预约')
+  const favorite=inspirations.filter(x=>x.favorite).slice(0,3), status=tripStatus(trip.start_date,trip.end_date)
+  const quick=[['/itinerary?new=1','新增日程',CalendarCheck],['/reservations?new=1','新增预约',NotebookTabs],['/inspirations?new=1','新增灵感',Lightbulb],['/expenses?new=1','记一笔',ReceiptText]] as const
+  return <div>
+    <ErrorBanner message={error}/>
+    <section className="relative overflow-hidden rounded-4xl bg-[#292824] p-7 text-white shadow-xl sm:p-9">
+      <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-coral-500/25 blur-3xl"/><div className="absolute -bottom-20 right-32 h-48 w-48 rounded-full bg-mint-500/20 blur-3xl"/>
+      <div className="relative"><p className="text-sm font-semibold uppercase tracking-[.25em] text-coral-500">Next journey</p><div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><h1 className="text-3xl font-bold sm:text-4xl">{trip.name}</h1><p className="mt-3 flex items-center gap-2 text-stone-300"><CalendarClock size={18}/>{formatDate(trip.start_date,{year:'numeric',month:'long',day:'numeric'})} — {formatDate(trip.end_date,{year:'numeric',month:'long',day:'numeric'})}</p><div className="mt-4 flex flex-wrap items-center gap-2">{cities.map((city,index)=><span key={city.id} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-stone-200">{index+1}. {city.name}</span>)}</div><p className="mt-3 text-lg font-semibold text-mint-500">{status.label}</p></div><div className="w-full max-w-sm"><div className="mb-2 flex justify-between text-sm"><span>预算使用</span><span>{percent.toFixed(0)}%</span></div><div className="h-2.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-coral-500 to-amber-300" style={{width:`${percent}%`}}/></div><p className="mt-2 text-right text-xs text-stone-400">{formatMoney(spent,trip.currency)} / {formatMoney(Number(trip.total_budget),trip.currency)}</p></div></div></div>
+    </section>
+    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{quick.map(([to,label,Icon])=><Link key={to} to={to} className="card flex items-center gap-3 p-4 text-sm font-semibold transition hover:-translate-y-0.5 hover:shadow-lg"><span className="rounded-xl bg-coral-50 p-2 text-coral-500"><Icon size={18}/></span>{label}<Plus className="ml-auto text-stone-300" size={16}/></Link>)}</div>
+    <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="下一项行程" value={upcoming?.title||'暂无安排'} note={upcoming?`${formatDate(upcoming.date)} ${upcoming.start_time.slice(0,5)}`:'去日程页添加吧'} icon={<Clock3/>}/><StatCard label="已预约" value={`${booked.length} 项`} note="一切都在计划中" icon={<CalendarCheck/>}/><StatCard label="待预约" value={`${pending.length} 项`} note={pending.length?'别忘了确认名额':'没有待办预约'} icon={<CalendarClock/>}/><StatCard label="已支出" value={formatMoney(spent,trip.currency)} note={foreignExpenses?`另有 ${foreignExpenses} 笔外币支出未折算`:`剩余 ${formatMoney(Number(trip.total_budget)-spent,trip.currency)}`} icon={<CircleDollarSign/>}/></div>
+    <div className="mt-6 grid gap-6 xl:grid-cols-3">
+      <section className="card p-6 xl:col-span-1"><h2 className="font-bold">今日日程</h2>{todayItems.length?<div className="mt-5 space-y-5 border-l-2 border-coral-100 pl-5">{todayItems.map(x=><div key={x.id} className="relative"><span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full bg-coral-500 ring-4 ring-white"/><p className="text-xs font-bold text-coral-600">{x.start_time.slice(0,5)}</p><p className="mt-1 font-semibold">{x.title}</p><p className="mt-1 flex items-center gap-1 text-xs text-stone-400"><MapPin size={12}/>{x.location||'地点待定'}</p></div>)}</div>:<p className="mt-6 text-sm text-stone-400">今天没有安排，留点时间随心走走。</p>}</section>
+      <section className="card p-6"><div className="flex items-center justify-between"><h2 className="font-bold">待办预约</h2><Link to="/reservations" className="text-xs font-semibold text-coral-600">查看全部</Link></div>{pending.length?<div className="mt-4 space-y-3">{pending.slice(0,4).map(x=><div key={x.id} className="rounded-2xl bg-stone-50 p-4"><div className="flex justify-between gap-3"><div><p className="font-semibold">{x.name}</p><p className="mt-1 text-xs text-stone-400">{formatDate(x.date)} · {x.location||'地点待定'}</p></div><Badge>{x.type}</Badge></div></div>)}</div>:<p className="mt-6 text-sm text-stone-400">预约任务已经全部搞定。</p>}</section>
+      <section className="card p-6"><div className="flex items-center justify-between"><h2 className="font-bold">最近收藏</h2><Link to="/inspirations" className="text-xs font-semibold text-coral-600">灵感库</Link></div>{favorite.length?<div className="mt-4 space-y-4">{favorite.map(x=><div key={x.id} className="border-b border-stone-100 pb-4 last:border-0"><div className="flex items-start justify-between gap-3"><p className="font-semibold">{x.title}</p><Badge tone="mint">{x.platform}</Badge></div><div className="mt-2"><LinkButton href={x.url}>{x.platform==='小红书'?'跳转小红书':'打开链接'}</LinkButton></div></div>)}</div>:<p className="mt-6 text-sm text-stone-400">还没有收藏的攻略。</p>}</section>
+    </div>
+  </div>
+}
