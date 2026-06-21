@@ -1,4 +1,4 @@
-import type { City, Destination, Expense, ExportPayload, Inspiration, ItineraryItem, NewItem, Place, Reservation, ReservationAttachment, RouteLeg, Trip } from '../types'
+import type { ChecklistItem, City, Destination, Expense, ExportPayload, GeocodeResult, Inspiration, ItineraryItem, NewItem, Place, Reservation, ReservationAttachment, RouteLeg, Trip } from '../types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '')
 
@@ -60,6 +60,8 @@ export const api = {
   places: resource<Place>('/places'),
   routeLegs: resource<RouteLeg>('/route-legs'),
   expenses: resource<Expense>('/expenses'),
+  checklist: resource<ChecklistItem>('/checklist'),
+  geocode: { search: (query:string) => request<GeocodeResult[]>(`/geocode?q=${encodeURIComponent(query)}`) },
   export: () => request<ExportPayload>('/export'),
   exportArchive: () => requestBlob('/export/archive'),
   import: (data: ExportPayload) => request<{ message: string }>('/import', { method: 'POST', body: JSON.stringify(data) }),

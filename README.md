@@ -1,12 +1,14 @@
 # Travel Planner / 旅途
 
-一个完全在本地运行的旅行行程管理网页端。它可以管理日程、预约、攻略灵感、地点、消费与旅行预算，所有数据都保存在本机 SQLite 数据库中。
+一个完全在本地运行的旅行行程管理网页端。它可以管理日程、预约、攻略灵感、地点、消费、行李清单、待办与旅行预算，所有数据都保存在本机 SQLite 数据库中。
 
-- 每笔消费可选择人民币、美元、欧元、英镑、日元等常用币种；不同币种分别汇总，不依赖在线汇率服务。
+- 每笔消费可记录人民币、美元、欧元、英镑等原币金额和折算汇率；预算与总支出统一按人民币汇总。
 - 日程、预约和地点中的地图可在当前页面弹窗预览，同时保留外部地图链接作为兼容兜底。
 - 支持创建和切换多个独立旅程；每个旅程按“国家 / 地区 → 城市 → 地点 / 日程 / 预约”组织。
 - 城市与路线页使用 OpenStreetMap 交互底图标出地点相对位置；路线支持步行、公交、驾车、火车、大巴、飞机等方案，并可关联自己的交通预约。
+- 新增城市或地点时可搜索 OpenStreetMap 地名并从候选结果中确认坐标；断网时仍可手动填写或留空。
 - 预约可上传多个车票、景点门票或确认单 PDF；文件经过格式与大小校验后保存在本地持久化存储中。
+- 行前清单分为行李和待办，可记录分类、数量、截止日期并勾选完成状态。
 
 ## 使用 Docker 启动（推荐）
 
@@ -58,7 +60,7 @@ docker compose up -d
 │     ├─ api/             REST API 客户端
 │     ├─ components/      布局、弹窗、表单和基础 UI
 │     ├─ hooks/           数据加载 Hook
-│     ├─ pages/           七个功能页面
+│     ├─ pages/           首页、日程、预约、灵感、地图、清单、记账与设置页面
 │     └─ types/           TypeScript 数据类型
 ├─ backend/               FastAPI + SQLAlchemy
 │  ├─ main.py             API 入口
@@ -126,6 +128,6 @@ npm run build
 
 ## 后续扩展 iOS App
 
-后端 REST API 与网页端解耦，未来 Swift / SwiftUI 客户端可以直接复用 `/api/trip`、`/api/itinerary`、`/api/reservations`、`/api/inspirations`、`/api/places`、`/api/expenses` 以及导入导出接口。届时主要新增：面向局域网或云端的部署方式、HTTPS、用户认证和 iOS 网络层；现有业务数据结构与 CRUD 语义可以继续使用。
+后端 REST API 与网页端解耦，未来 Swift / SwiftUI 客户端可以直接复用 `/api/trip`、`/api/itinerary`、`/api/reservations`、`/api/inspirations`、`/api/places`、`/api/expenses`、`/api/checklist` 以及导入导出接口。届时主要新增：面向局域网或云端的部署方式、HTTPS、用户认证和 iOS 网络层；现有业务数据结构与 CRUD 语义可以继续使用。
 
 多旅程客户端应优先使用 `/api/trips` 和 `/api/destinations`，并在其他列表接口中传入 `trip_id`，以保证不同旅程的数据相互隔离。

@@ -15,6 +15,7 @@ PlatformType = Literal["小红书", "公众号", "网页", "其他"]
 PlaceType = Literal["酒店", "车站", "机场", "景点", "餐厅", "商场", "其他"]
 ExpenseCategory = Literal["交通", "住宿", "餐饮", "门票", "购物", "其他"]
 TransportMode = Literal["步行", "公共交通", "出租车", "自驾", "骑行", "火车", "大巴", "飞机", "轮渡", "其他"]
+ChecklistKind = Literal["行李", "待办"]
 
 
 class ORMModel(BaseModel):
@@ -265,6 +266,9 @@ class ExpenseBase(ORMModel):
     title: str = Field(min_length=1, max_length=160)
     amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     currency: str = Field(default="CNY", min_length=3, max_length=3)
+    original_amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+    original_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    exchange_rate: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=6)
     date: dt_date
     category: ExpenseCategory
     payment_method: str | None = None
@@ -273,15 +277,24 @@ class ExpenseBase(ORMModel):
     itinerary_id: int | None = None
     reservation_id: int | None = None
 
-    @field_serializer("amount", when_used="json")
-    def serialize_amount(self, value: Decimal) -> float:
-        return float(value)
+    @field_serializer("amount", "original_amount", "exchange_rate", when_used="json")
+    def serialize_amount(self, value: Decimal | None) -> float | None:
+        return float(value) if value is not None else None
 
     @field_validator("currency")
     @classmethod
     def expense_currency_upper(cls, value: str) -> str:
         if not value.isalpha():
             raise ValueError("货币代码必须为 3 个字母")
+        return value.upper()
+
+    @field_validator("original_currency")
+    @classmethod
+    def original_currency_upper(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.isalpha():
+            raise ValueError("原币代码必须为 3 个字母")
         return value.upper()
 
 
@@ -291,6 +304,34 @@ class ExpenseCreate(ExpenseBase):
 
 class ExpenseRead(ExpenseBase):
     id: int
+
+
+class ChecklistItemBase(ORMModel):
+    trip_id: int = 1
+    kind: ChecklistKind
+    title: str = Field(min_length=1, max_length=160)
+    category: str | None = Field(default=None, max_length=60)
+    quantity: int = Field(default=1, ge=1, le=999)
+    completed: bool = False
+    due_date: dt_date | None = None
+    note: str | None = None
+    order_index: int = Field(default=0, ge=0)
+
+
+class ChecklistItemCreate(ChecklistItemBase):
+    pass
+
+
+class ChecklistItemRead(ChecklistItemBase):
+    id: int
+
+
+class GeocodeResult(BaseModel):
+    name: str
+    display_name: str
+    latitude: float
+    longitude: float
+    result_type: str | None = None
 
 
 class ExportPayload(BaseModel):
@@ -306,6 +347,7 @@ class ExportPayload(BaseModel):
     route_legs: list[RouteLegRead] = Field(default_factory=list)
     trips: list[TripRead] = Field(default_factory=list)
     destinations: list[DestinationRead] = Field(default_factory=list)
+    checklist: list[ChecklistItemRead] = Field(default_factory=list)
 
 
 class ImportResult(BaseModel):

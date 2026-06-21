@@ -156,6 +156,9 @@ class Expense(Base):
     title: Mapped[str] = mapped_column(String(160))
     amount: Mapped[object] = mapped_column(Numeric(12, 2))
     currency: Mapped[str] = mapped_column(String(3), default="CNY")
+    original_amount: Mapped[object | None] = mapped_column(Numeric(12, 2), nullable=True)
+    original_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    exchange_rate: Mapped[object | None] = mapped_column(Numeric(12, 6), nullable=True)
     date: Mapped[object] = mapped_column(Date, index=True)
     category: Mapped[str] = mapped_column(String(20), index=True)
     payment_method: Mapped[str | None] = mapped_column(String(60), nullable=True)
@@ -167,3 +170,18 @@ class Expense(Base):
     reservation_id: Mapped[int | None] = mapped_column(
         ForeignKey("reservations.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class ChecklistItem(Base):
+    __tablename__ = "checklist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    category: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    due_date: Mapped[object | None] = mapped_column(Date, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)

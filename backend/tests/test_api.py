@@ -125,6 +125,32 @@ def test_not_found_and_validation():
         assert client.put("/api/trip", json={k:v for k,v in trip.items() if k != "id"}).status_code == 422
 
 
+def test_checklist_crud_and_geocode(monkeypatch):
+    async def fake_geocode(query: str, limit: int):
+        assert query == "巴黎"
+        assert limit == 5
+        return [{"name": "Paris", "display_name": "Paris, Île-de-France, France", "latitude": 48.8566, "longitude": 2.3522, "result_type": "city"}]
+
+    monkeypatch.setattr("main.fetch_geocode", fake_geocode)
+    with TestClient(app) as client:
+        trip_id = client.get("/api/trip").json()["id"]
+        created = client.post("/api/checklist", json={
+            "trip_id": trip_id, "kind": "待办", "title": "核对护照", "category": "证件",
+            "quantity": 1, "completed": False, "due_date": "2026-06-20", "note": None, "order_index": 0,
+        })
+        assert created.status_code == 201
+        item = created.json()
+        item["completed"] = True
+        updated = client.put(f"/api/checklist/{item['id']}", json={key:value for key,value in item.items() if key != "id"})
+        assert updated.status_code == 200
+        assert updated.json()["completed"] is True
+        assert len(client.get(f"/api/checklist?trip_id={trip_id}&kind=待办").json()) == 1
+        geocoded = client.get("/api/geocode", params={"q": "巴黎"})
+        assert geocoded.status_code == 200
+        assert geocoded.json()[0]["latitude"] == 48.8566
+        assert client.delete(f"/api/checklist/{item['id']}").status_code == 204
+
+
 def test_multiple_trips_are_isolated_and_cascade():
     with TestClient(app) as client:
         first_trip = client.get("/api/trips").json()[0]

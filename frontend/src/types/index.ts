@@ -5,6 +5,7 @@ export type PlatformType = '小红书' | '公众号' | '网页' | '其他'
 export type PlaceType = '酒店' | '车站' | '机场' | '景点' | '餐厅' | '商场' | '其他'
 export type ExpenseCategory = '交通' | '住宿' | '餐饮' | '门票' | '购物' | '其他'
 export type TransportMode = '步行' | '公共交通' | '出租车' | '自驾' | '骑行' | '火车' | '大巴' | '飞机' | '轮渡' | '其他'
+export type ChecklistKind = '行李' | '待办'
 
 export interface Trip {
   id: number; name: string; start_date: string; end_date: string; total_budget: number; currency: string
@@ -47,11 +48,20 @@ export interface RouteLeg {
 }
 export interface Expense {
   id: number; trip_id: number; title: string; amount: number; currency: string; date: string; category: ExpenseCategory; payment_method: string | null
+  original_amount: number | null; original_currency: string | null; exchange_rate: number | null
   note: string | null; is_split: boolean; itinerary_id: number | null; reservation_id: number | null
+}
+export interface ChecklistItem {
+  id: number; trip_id: number; kind: ChecklistKind; title: string; category: string | null; quantity: number
+  completed: boolean; due_date: string | null; note: string | null; order_index: number
+}
+export interface GeocodeResult {
+  name: string; display_name: string; latitude: number; longitude: number; result_type: string | null
 }
 export type NewItem<T extends { id: number }> = Omit<T, 'id'>
 export interface ExportPayload {
   schema_version: 1; exported_at: string; trip: Trip; itinerary: ItineraryItem[]; reservations: Reservation[]
   inspirations: Inspiration[]; places: Place[]; expenses: Expense[]; cities: City[]; route_legs: RouteLeg[]
   trips: Trip[]; destinations: Destination[]
+  checklist: ChecklistItem[]
 }

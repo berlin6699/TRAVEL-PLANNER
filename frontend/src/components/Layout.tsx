@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, Compass, Home, MapPin, Menu, NotebookTabs, Plus, ReceiptText, Settings, X } from 'lucide-react'
+import { CalendarDays, CheckSquare2, Compass, Home, MapPin, Menu, NotebookTabs, Plus, ReceiptText, Settings, X } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api } from '../api/client'
 import { useTrip } from '../contexts/TripContext'
@@ -9,7 +9,8 @@ import { Modal } from './UI'
 
 const nav = [
   ['/', '首页', Home], ['/itinerary', '城市日程', CalendarDays], ['/reservations', '预约', NotebookTabs],
-  ['/inspirations', '灵感', Compass], ['/places', '城市与路线', MapPin], ['/expenses', '记账', ReceiptText], ['/settings', '设置', Settings],
+  ['/inspirations', '灵感', Compass], ['/places', '城市与路线', MapPin], ['/checklist', '行前清单', CheckSquare2],
+  ['/expenses', '记账', ReceiptText], ['/settings', '设置', Settings],
 ] as const
 
 export default function Layout() {

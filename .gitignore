@@ -9,3 +9,5 @@ backend/tests/test_travel.db
 *.pyc
 .DS_Store
 .env
+.codex-tmp/
+6-8月欧洲旅游行程规划/

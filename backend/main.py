@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 from datetime import date, datetime, timezone
 from io import BytesIO
 import json
@@ -6,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+from time import monotonic
 from uuid import uuid4
 from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile
 
@@ -13,15 +15,16 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pypdf import PdfReader
+import httpx
 from sqlalchemy import delete, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import crud
 from database import Base, SessionLocal, engine, get_db
-from models import City, Destination, Expense, Inspiration, ItineraryItem, Place, Reservation, ReservationAttachment, RouteLeg, TripInfo
+from models import ChecklistItem, City, Destination, Expense, Inspiration, ItineraryItem, Place, Reservation, ReservationAttachment, RouteLeg, TripInfo
 from schemas import (
-    CityCreate, CityRead, DestinationCreate, DestinationRead, ExpenseCreate, ExpenseRead, ExportPayload, ImportResult,
+    ChecklistItemCreate, ChecklistItemRead, CityCreate, CityRead, DestinationCreate, DestinationRead, ExpenseCreate, ExpenseRead, ExportPayload, GeocodeResult, ImportResult,
     InspirationCreate, InspirationRead, ItineraryCreate, ItineraryRead, PlaceCreate, PlaceRead,
     ReservationAttachmentRead, ReservationCreate, ReservationRead, RouteLegCreate, RouteLegRead, TripBase, TripRead,
 )
@@ -32,6 +35,11 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).resolve().parent / "upl
 MAX_PDF_BYTES = 15 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 250 * 1024 * 1024
 MAX_ARCHIVE_CONTENT_BYTES = 300 * 1024 * 1024
+GEOCODING_URL = os.getenv("GEOCODING_URL", "https://nominatim.openstreetmap.org/search")
+GEOCODING_USER_AGENT = os.getenv("GEOCODING_USER_AGENT", "TravelPlannerLocal/1.0 (self-hosted local travel planner)")
+_geocode_cache: dict[str, tuple[float, list[dict]]] = {}
+_geocode_lock = asyncio.Lock()
+_last_geocode_request = 0.0
 
 
 def remove_upload_files(stored_names: list[str]) -> None:
@@ -67,7 +75,11 @@ def initialize_database() -> None:
         "inspirations": {"trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
         "route_legs": {"trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
         "cities": {"destination_id": "INTEGER REFERENCES destinations(id) ON DELETE SET NULL"},
-        "expenses": {"currency": "VARCHAR(3) NOT NULL DEFAULT 'CNY'", "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
+        "expenses": {
+            "currency": "VARCHAR(3) NOT NULL DEFAULT 'CNY'", "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE",
+            "original_amount": "NUMERIC(12, 2)", "original_currency": "VARCHAR(3)", "exchange_rate": "NUMERIC(12, 6)",
+        },
+        "checklist_items": {"trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
     }
     existing_tables = set(inspect(engine).get_table_names())
     with engine.begin() as connection:
@@ -78,7 +90,7 @@ def initialize_database() -> None:
             for column_name, definition in additions.items():
                 if column_name not in columns:
                     connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
-        for table_name in ("places", "itinerary_items", "reservations", "inspirations", "route_legs", "expenses"):
+        for table_name in ("places", "itinerary_items", "reservations", "inspirations", "route_legs", "expenses", "checklist_items"):
             if table_name in existing_tables and "trip_id" in {column["name"] for column in inspect(engine).get_columns(table_name)}:
                 connection.execute(text(f"UPDATE {table_name} SET trip_id = 1 WHERE trip_id IS NULL"))
     with SessionLocal() as db:
@@ -105,6 +117,43 @@ app.add_middleware(
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+async def fetch_geocode(query: str, limit: int) -> list[dict]:
+    global _last_geocode_request
+    cache_key = f"{query.casefold()}::{limit}"
+    cached = _geocode_cache.get(cache_key)
+    if cached and monotonic() - cached[0] < 86400:
+        return cached[1]
+    async with _geocode_lock:
+        cached = _geocode_cache.get(cache_key)
+        if cached and monotonic() - cached[0] < 86400:
+            return cached[1]
+        wait = 1.05 - (monotonic() - _last_geocode_request)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        try:
+            async with httpx.AsyncClient(timeout=12, headers={"User-Agent": GEOCODING_USER_AGENT, "Accept-Language": "zh-CN,zh,en"}) as client:
+                response = await client.get(GEOCODING_URL, params={"q": query, "format": "jsonv2", "addressdetails": 1, "limit": limit})
+                response.raise_for_status()
+                raw = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(503, "地点搜索服务暂时不可用，请稍后重试或手动填写坐标") from exc
+        finally:
+            _last_geocode_request = monotonic()
+        results = [{
+            "name": item.get("name") or str(item.get("display_name", "")).split(",")[0],
+            "display_name": item.get("display_name", ""),
+            "latitude": float(item["lat"]), "longitude": float(item["lon"]),
+            "result_type": item.get("type"),
+        } for item in raw if item.get("lat") and item.get("lon") and item.get("display_name")]
+        _geocode_cache[cache_key] = (monotonic(), results)
+        return results
+
+
+@app.get("/api/geocode", response_model=list[GeocodeResult])
+async def geocode(q: str = Query(min_length=2, max_length=160), limit: int = Query(default=5, ge=1, le=8)):
+    return await fetch_geocode(q.strip(), limit)
 
 
 @app.get("/api/trip", response_model=TripRead)
@@ -182,7 +231,7 @@ def get_cities(trip_id: int | None = None, destination_id: int | None = None, db
         query = query.where(City.trip_id == trip_id)
     if destination_id:
         query = query.where(City.destination_id == destination_id)
-    return list(db.scalars(query.order_by(City.order_index, City.id)))
+    return list(db.scalars(query.order_by(City.arrival_date.is_(None), City.arrival_date, City.order_index, City.id)))
 
 
 @app.post("/api/cities", response_model=CityRead, status_code=201)
@@ -437,6 +486,34 @@ def delete_expense(item_id: int, db: Session = Depends(get_db)):
     return Response(status_code=204)
 
 
+@app.get("/api/checklist", response_model=list[ChecklistItemRead])
+def get_checklist(kind: str | None = None, completed: bool | None = None, trip_id: int | None = None, db: Session = Depends(get_db)):
+    query = select(ChecklistItem)
+    if kind:
+        query = query.where(ChecklistItem.kind == kind)
+    if completed is not None:
+        query = query.where(ChecklistItem.completed == completed)
+    if trip_id:
+        query = query.where(ChecklistItem.trip_id == trip_id)
+    return list(db.scalars(query.order_by(ChecklistItem.completed, ChecklistItem.order_index, ChecklistItem.id)))
+
+
+@app.post("/api/checklist", response_model=ChecklistItemRead, status_code=201)
+def create_checklist_item(payload: ChecklistItemCreate, db: Session = Depends(get_db)):
+    return crud.create_item(db, ChecklistItem, payload)
+
+
+@app.put("/api/checklist/{item_id}", response_model=ChecklistItemRead)
+def update_checklist_item(item_id: int, payload: ChecklistItemCreate, db: Session = Depends(get_db)):
+    return crud.update_item(db, crud.get_or_404(db, ChecklistItem, item_id), payload)
+
+
+@app.delete("/api/checklist/{item_id}", status_code=204)
+def delete_checklist_item(item_id: int, db: Session = Depends(get_db)):
+    crud.delete_item(db, crud.get_or_404(db, ChecklistItem, item_id))
+    return Response(status_code=204)
+
+
 def build_export(db: Session) -> ExportPayload:
     trips = crud.list_items(db, TripInfo, TripInfo.id)
     if not trips:
@@ -451,6 +528,7 @@ def build_export(db: Session) -> ExportPayload:
         expenses=crud.list_items(db, Expense, Expense.date, Expense.id),
         cities=crud.list_items(db, City, City.order_index, City.id),
         route_legs=crud.list_items(db, RouteLeg, RouteLeg.order_index, RouteLeg.id),
+        checklist=crud.list_items(db, ChecklistItem, ChecklistItem.completed, ChecklistItem.order_index, ChecklistItem.id),
     )
 
 
@@ -546,8 +624,11 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
             raise HTTPException(400, f"消费 {item.id} 引用了不存在的日程")
         if item.reservation_id and item.reservation_id not in reservation_ids:
             raise HTTPException(400, f"消费 {item.id} 引用了不存在的预约")
+    for item in payload.checklist:
+        if item.trip_id not in trip_ids:
+            raise HTTPException(400, f"清单 {item.id} 引用了不存在的旅程")
     try:
-        for model in (Expense, RouteLeg, ItineraryItem, Inspiration, ReservationAttachment, Reservation, Place, City, Destination, TripInfo):
+        for model in (ChecklistItem, Expense, RouteLeg, ItineraryItem, Inspiration, ReservationAttachment, Reservation, Place, City, Destination, TripInfo):
             db.execute(delete(model))
         db.add_all([TripInfo(**item.model_dump()) for item in trips_to_import])
         db.flush()
@@ -566,6 +647,8 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
         db.flush()
         db.add_all([RouteLeg(**item.model_dump()) for item in payload.route_legs])
         db.flush()
+        db.add_all([ChecklistItem(**item.model_dump()) for item in payload.checklist])
+        db.flush()
         db.commit()
         remove_upload_files(old_uploads)
     except IntegrityError as exc:
@@ -579,6 +662,7 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
             "expenses": len(payload.expenses),
             "cities": len(payload.cities), "route_legs": len(payload.route_legs),
             "trips": len(trips_to_import), "destinations": len(payload.destinations),
+            "checklist": len(payload.checklist),
         },
     )
 
@@ -662,7 +746,7 @@ async def import_archive(file: UploadFile = File(...), db: Session = Depends(get
 @app.delete("/api/reset", status_code=204)
 def reset_data(db: Session = Depends(get_db)):
     old_uploads = list(db.scalars(select(ReservationAttachment.stored_name)))
-    for model in (Expense, RouteLeg, ItineraryItem, Inspiration, ReservationAttachment, Reservation, Place, City, Destination, TripInfo):
+    for model in (ChecklistItem, Expense, RouteLeg, ItineraryItem, Inspiration, ReservationAttachment, Reservation, Place, City, Destination, TripInfo):
         db.execute(delete(model))
     today = date.today()
     db.add(TripInfo(id=1, name="我的旅行", start_date=today, end_date=today, total_budget=0, currency="CNY"))
