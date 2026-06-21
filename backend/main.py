@@ -1,9 +1,13 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from io import BytesIO
+import json
 import os
 from pathlib import Path
+import shutil
+import tempfile
 from uuid import uuid4
+from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,11 +30,26 @@ from seed import migrate_existing_city_data, seed_database
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).resolve().parent / "uploads"))
 MAX_PDF_BYTES = 15 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 250 * 1024 * 1024
+MAX_ARCHIVE_CONTENT_BYTES = 300 * 1024 * 1024
 
 
 def remove_upload_files(stored_names: list[str]) -> None:
     for stored_name in stored_names:
         (UPLOAD_DIR / stored_name).unlink(missing_ok=True)
+
+
+def validate_pdf_content(content: bytes) -> None:
+    if len(content) > MAX_PDF_BYTES:
+        raise HTTPException(413, "PDF 文件不能超过 15 MB")
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(400, "文件不是有效的 PDF")
+    try:
+        reader = PdfReader(BytesIO(content))
+        if len(reader.pages) < 1:
+            raise ValueError("PDF 没有页面")
+    except Exception as exc:
+        raise HTTPException(400, "PDF 文件损坏或无法读取") from exc
 
 
 def initialize_database() -> None:
@@ -274,16 +293,7 @@ async def upload_reservation_attachment(reservation_id: int, file: UploadFile = 
     if not original_name.lower().endswith(".pdf"):
         raise HTTPException(400, "只支持上传 PDF 文件")
     content = await file.read(MAX_PDF_BYTES + 1)
-    if len(content) > MAX_PDF_BYTES:
-        raise HTTPException(413, "PDF 文件不能超过 15 MB")
-    if not content.startswith(b"%PDF-"):
-        raise HTTPException(400, "文件不是有效的 PDF")
-    try:
-        reader = PdfReader(BytesIO(content))
-        if len(reader.pages) < 1:
-            raise ValueError("PDF 没有页面")
-    except Exception as exc:
-        raise HTTPException(400, "PDF 文件损坏或无法读取") from exc
+    validate_pdf_content(content)
     stored_name = f"{uuid4().hex}.pdf"
     target = UPLOAD_DIR / stored_name
     try:
@@ -449,6 +459,37 @@ def export_data(db: Session = Depends(get_db)):
     return build_export(db)
 
 
+@app.get("/api/export/archive")
+def export_archive(db: Session = Depends(get_db)):
+    payload = build_export(db).model_dump(mode="json")
+    attachments = list(db.scalars(select(ReservationAttachment).order_by(ReservationAttachment.id)))
+    manifest_attachments = []
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", compression=ZIP_DEFLATED, compresslevel=6) as archive:
+        for attachment in attachments:
+            path = UPLOAD_DIR / attachment.stored_name
+            if not path.is_file():
+                continue
+            archive_path = f"attachments/{attachment.id}-{Path(attachment.original_name).name}"
+            archive.write(path, archive_path)
+            manifest_attachments.append({
+                "id": attachment.id,
+                "reservation_id": attachment.reservation_id,
+                "original_name": attachment.original_name,
+                "mime_type": attachment.mime_type,
+                "size_bytes": attachment.size_bytes,
+                "uploaded_at": attachment.uploaded_at.isoformat(),
+                "archive_path": archive_path,
+            })
+        payload["reservation_attachments"] = manifest_attachments
+        archive.writestr("travel-planner.json", json.dumps(payload, ensure_ascii=False, indent=2))
+    filename = f"travel-planner-full-{date.today().isoformat()}.zip"
+    return Response(
+        content=buffer.getvalue(), media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.post("/api/import", response_model=ImportResult)
 def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
     old_uploads = list(db.scalars(select(ReservationAttachment.stored_name)))
@@ -540,6 +581,82 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
             "trips": len(trips_to_import), "destinations": len(payload.destinations),
         },
     )
+
+
+@app.post("/api/import/archive", response_model=ImportResult)
+async def import_archive(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(400, "请选择 Travel Planner 导出的 ZIP 备份")
+    raw = await file.read(MAX_ARCHIVE_BYTES + 1)
+    if len(raw) > MAX_ARCHIVE_BYTES:
+        raise HTTPException(413, "完整备份 ZIP 不能超过 250 MB")
+    staging_dir = Path(tempfile.mkdtemp(prefix="import-", dir=UPLOAD_DIR))
+    staged: list[dict] = []
+    moved_files: list[str] = []
+    try:
+        try:
+            archive = ZipFile(BytesIO(raw), "r")
+        except BadZipFile as exc:
+            raise HTTPException(400, "ZIP 备份已损坏") from exc
+        with archive:
+            infos = archive.infolist()
+            if len(infos) > 1000 or sum(info.file_size for info in infos) > MAX_ARCHIVE_CONTENT_BYTES:
+                raise HTTPException(413, "ZIP 解压后的内容过大")
+            for info in infos:
+                path = Path(info.filename)
+                if path.is_absolute() or ".." in path.parts:
+                    raise HTTPException(400, "ZIP 包含不安全的文件路径")
+            try:
+                manifest = json.loads(archive.read("travel-planner.json"))
+                payload = ExportPayload.model_validate(manifest)
+            except KeyError as exc:
+                raise HTTPException(400, "ZIP 中缺少 travel-planner.json") from exc
+            except Exception as exc:
+                raise HTTPException(400, "备份数据格式无效") from exc
+            reservation_ids = {item.id for item in payload.reservations}
+            seen_paths: set[str] = set()
+            for item in manifest.get("reservation_attachments", []):
+                reservation_id = int(item.get("reservation_id", 0))
+                archive_path = str(item.get("archive_path", ""))
+                original_name = Path(str(item.get("original_name", "ticket.pdf"))).name
+                if reservation_id not in reservation_ids or not archive_path or archive_path in seen_paths:
+                    raise HTTPException(400, "PDF 附件清单包含无效关联")
+                seen_paths.add(archive_path)
+                try:
+                    content = archive.read(archive_path)
+                except KeyError as exc:
+                    raise HTTPException(400, f"ZIP 中缺少附件：{original_name}") from exc
+                validate_pdf_content(content)
+                staged_name = f"{uuid4().hex}.pdf"
+                (staging_dir / staged_name).write_bytes(content)
+                try:
+                    uploaded_at = datetime.fromisoformat(str(item.get("uploaded_at", "")))
+                except ValueError:
+                    uploaded_at = datetime.utcnow()
+                staged.append({
+                    "reservation_id": reservation_id, "original_name": original_name,
+                    "stored_name": staged_name, "mime_type": "application/pdf",
+                    "size_bytes": len(content), "uploaded_at": uploaded_at,
+                })
+        result = import_data(payload, db)
+        try:
+            records = []
+            for item in staged:
+                source = staging_dir / item["stored_name"]
+                target = UPLOAD_DIR / item["stored_name"]
+                source.replace(target)
+                moved_files.append(item["stored_name"])
+                records.append(ReservationAttachment(**item))
+            db.add_all(records)
+            db.commit()
+        except Exception:
+            db.rollback()
+            remove_upload_files(moved_files)
+            raise HTTPException(500, "结构化数据已恢复，但 PDF 文件写入失败")
+        result.counts["attachments"] = len(staged)
+        return result
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 @app.delete("/api/reset", status_code=204)

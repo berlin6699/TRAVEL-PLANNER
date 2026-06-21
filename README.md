@@ -36,7 +36,7 @@ docker compose up -d
 
 SQLite 数据保存在名为 `travel-planner-data` 的 Docker 卷中。`docker compose down`、更新镜像或重建容器都不会删除它。只有明确执行下面的命令才会连同数据库一起删除：
 
-预约 PDF 位于同一个 Docker 卷的 `/data/uploads`。当前 JSON 导出包含结构化行程数据，但不包含 PDF 二进制文件；完整迁移 Docker 数据时需要同时备份 `travel-planner-data` 卷。
+预约 PDF 位于同一个 Docker 卷的 `/data/uploads`。设置页导出的完整 ZIP 同时包含 `travel-planner.json` 和全部 PDF，可直接导入恢复；旧版纯 JSON 仍可导入，但不包含 PDF。
 
 ```powershell
 docker compose down -v
@@ -109,8 +109,8 @@ npm run dev
 
 ## 导入、导出与清空
 
-- 设置页点击“导出 JSON 备份”，浏览器会下载完整数据文件。
-- 点击“导入 JSON 恢复”并选择此前导出的文件。导入会先校验全部内容，然后以单个事务完整替换当前数据；失败时不会留下半份数据。
+- 设置页点击“导出完整备份 ZIP”，浏览器会下载旅程数据及全部预约 PDF。
+- 点击“导入备份恢复”可选择完整 ZIP 或旧版 JSON。ZIP 会校验路径、体积、数据关联及每个 PDF 后再恢复。
 - “清空本地数据库”需要连续确认两次，随后删除全部业务记录并保留空白旅行设置。
 
 ## 测试与构建

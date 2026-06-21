@@ -23,6 +23,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  const response=await fetch(`${BASE_URL}${path}`)
+  if(!response.ok)throw new ApiError('完整备份导出失败',response.status)
+  return response.blob()
+}
+
 const resource = <T extends { id: number }>(path: string) => ({
   list: (params?: Record<string, string | number | boolean | null | undefined>) => {
     const query = new URLSearchParams()
@@ -55,6 +61,8 @@ export const api = {
   routeLegs: resource<RouteLeg>('/route-legs'),
   expenses: resource<Expense>('/expenses'),
   export: () => request<ExportPayload>('/export'),
+  exportArchive: () => requestBlob('/export/archive'),
   import: (data: ExportPayload) => request<{ message: string }>('/import', { method: 'POST', body: JSON.stringify(data) }),
+  importArchive: (file: File) => { const form=new FormData();form.append('file',file);return request<{message:string;counts:Record<string,number>}>('/import/archive',{method:'POST',body:form}) },
   reset: () => request<void>('/reset', { method: 'DELETE' }),
 }

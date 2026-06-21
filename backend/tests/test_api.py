@@ -1,8 +1,10 @@
 import os
 from io import BytesIO
+import json
 from pathlib import Path
+from zipfile import ZipFile
 
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 
 TEST_DB = Path(__file__).parent / "test_travel.db"
 TEST_UPLOADS = Path(__file__).parent / "test_uploads"
@@ -72,6 +74,15 @@ def test_full_api_flow():
         opened = client.get(f"/api/reservation-attachments/{attachment_id}/file")
         assert opened.status_code == 200
         assert opened.content.startswith(b"%PDF-")
+        archive_response = client.get("/api/export/archive")
+        assert archive_response.status_code == 200
+        archive_bytes = archive_response.content
+        with ZipFile(BytesIO(archive_bytes)) as backup:
+            assert "travel-planner.json" in backup.namelist()
+            manifest = json.loads(backup.read("travel-planner.json"))
+            assert len(manifest["reservation_attachments"]) == 1
+            archived_pdf = backup.read(manifest["reservation_attachments"][0]["archive_path"])
+            assert len(PdfReader(BytesIO(archived_pdf)).pages) == 1
         invalid_pdf = client.post(
             f"/api/reservations/{reservation_id}/attachments",
             files={"file": ("fake.pdf", b"not-a-pdf", "application/pdf")},
@@ -91,6 +102,19 @@ def test_full_api_flow():
         imported = client.post("/api/import", json=payload)
         assert imported.status_code == 200, imported.text
         assert len(client.get("/api/places").json()) == len(payload["places"])
+        assert client.get("/api/reservation-attachments").json() == []
+
+        restored = client.post(
+            "/api/import/archive",
+            files={"file": ("travel-planner-full.zip", archive_bytes, "application/zip")},
+        )
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["counts"]["attachments"] == 1
+        restored_attachments = client.get("/api/reservation-attachments").json()
+        assert len(restored_attachments) == 1
+        restored_pdf = client.get(f"/api/reservation-attachments/{restored_attachments[0]['id']}/file")
+        assert len(PdfReader(BytesIO(restored_pdf.content)).pages) == 1
+        assert client.delete(f"/api/reservation-attachments/{restored_attachments[0]['id']}").status_code == 204
 
 
 def test_not_found_and_validation():
