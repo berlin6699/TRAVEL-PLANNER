@@ -14,7 +14,7 @@ export function StatCard({ label, value, note, icon }: { label: string; value: R
 
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
   if (!open) return null
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+  return <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm" onMouseDown={onClose}>
     <div role="dialog" aria-modal="true" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl" onMouseDown={e => e.stopPropagation()}>
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white/95 px-6 py-5 backdrop-blur"><h2 className="text-xl font-bold">{title}</h2><button aria-label="关闭" onClick={onClose} className="rounded-full p-2 hover:bg-stone-100"><X size={20}/></button></div>
       <div className="p-6">{children}</div>
@@ -35,4 +35,3 @@ export function Badge({ children, tone = 'coral' }: { children: ReactNode; tone?
 export function LinkButton({ href, children }: { href: string; children: ReactNode }) { return <a className="inline-flex items-center gap-1.5 text-sm font-semibold text-coral-600 hover:text-coral-700" href={href} target="_blank" rel="noreferrer">{children}<ExternalLink size={14}/></a> }
 export function ImageCover({ src, label }: { src?: string | null; label: string }) { return <div className="relative h-40 overflow-hidden bg-gradient-to-br from-coral-100 via-amber-50 to-mint-100">{src ? <img src={src} alt="" className="h-full w-full object-cover" onError={e => { e.currentTarget.style.display='none' }}/> : null}<span className="absolute bottom-3 left-3 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-stone-700 backdrop-blur">{label}</span></div> }
 export function IconButton({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) { return <button className="rounded-lg p-2 text-stone-400 transition hover:bg-stone-100 hover:text-stone-700" {...props}>{children}</button> }
-

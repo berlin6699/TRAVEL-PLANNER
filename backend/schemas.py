@@ -60,8 +60,27 @@ class TripRead(TripBase):
     id: int
 
 
+class DestinationBase(ORMModel):
+    trip_id: int
+    name: str = Field(min_length=1, max_length=100)
+    type: Literal["国家", "地区"] = "国家"
+    code: str | None = Field(default=None, max_length=10)
+    order_index: int = Field(default=0, ge=0)
+    parent_id: int | None = None
+    note: str | None = None
+
+
+class DestinationCreate(DestinationBase):
+    pass
+
+
+class DestinationRead(DestinationBase):
+    id: int
+
+
 class CityBase(ORMModel):
     trip_id: int = 1
+    destination_id: int | None = None
     name: str = Field(min_length=1, max_length=100)
     country: str | None = None
     order_index: int = Field(default=0, ge=0)
@@ -91,6 +110,7 @@ class CityRead(CityBase):
 
 
 class ItineraryBase(ORMModel):
+    trip_id: int = 1
     title: str = Field(min_length=1, max_length=160)
     date: dt_date
     start_time: dt_time
@@ -122,6 +142,7 @@ class ItineraryRead(ItineraryBase):
 
 
 class ReservationBase(ORMModel):
+    trip_id: int = 1
     name: str = Field(min_length=1, max_length=160)
     type: ReservationType
     date: dt_date
@@ -147,6 +168,7 @@ class ReservationRead(ReservationBase):
 
 
 class InspirationBase(ORMModel):
+    trip_id: int = 1
     title: str = Field(min_length=1, max_length=160)
     platform: PlatformType
     url: str
@@ -173,6 +195,7 @@ class InspirationRead(InspirationBase):
 
 
 class PlaceBase(ORMModel):
+    trip_id: int = 1
     name: str = Field(min_length=1, max_length=160)
     type: PlaceType
     city: str | None = None
@@ -200,6 +223,7 @@ class PlaceRead(PlaceBase):
 
 
 class RouteLegBase(ORMModel):
+    trip_id: int = 1
     title: str = Field(min_length=1, max_length=160)
     from_place_id: int
     to_place_id: int
@@ -228,6 +252,7 @@ class RouteLegRead(RouteLegBase):
 
 
 class ExpenseBase(ORMModel):
+    trip_id: int = 1
     title: str = Field(min_length=1, max_length=160)
     amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     currency: str = Field(default="CNY", min_length=3, max_length=3)
@@ -270,6 +295,8 @@ class ExportPayload(BaseModel):
     expenses: list[ExpenseRead]
     cities: list[CityRead] = Field(default_factory=list)
     route_legs: list[RouteLegRead] = Field(default_factory=list)
+    trips: list[TripRead] = Field(default_factory=list)
+    destinations: list[DestinationRead] = Field(default_factory=list)
 
 
 class ImportResult(BaseModel):

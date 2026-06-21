@@ -73,6 +73,39 @@ def test_not_found_and_validation():
         assert client.put("/api/trip", json={k:v for k,v in trip.items() if k != "id"}).status_code == 422
 
 
+def test_multiple_trips_are_isolated_and_cascade():
+    with TestClient(app) as client:
+        first_trip = client.get("/api/trips").json()[0]
+        second = client.post("/api/trips", json={
+            "name": "欧洲双国旅行", "start_date": "2027-05-01", "end_date": "2027-05-12",
+            "total_budget": 30000, "currency": "CNY",
+        })
+        assert second.status_code == 201
+        second_id = second.json()["id"]
+        destination = client.post("/api/destinations", json={
+            "trip_id": second_id, "name": "法国", "type": "国家", "code": "FR",
+            "order_index": 0, "parent_id": None, "note": None,
+        })
+        assert destination.status_code == 201
+        city = client.post("/api/cities", json={
+            "trip_id": second_id, "destination_id": destination.json()["id"], "name": "巴黎",
+            "country": "法国", "order_index": 0, "arrival_date": "2027-05-01",
+            "departure_date": "2027-05-05", "latitude": 48.8566, "longitude": 2.3522, "note": None,
+        })
+        assert city.status_code == 201
+        place = client.post("/api/places", json={
+            "trip_id": second_id, "city_id": city.json()["id"], "name": "卢浮宫", "type": "景点",
+            "city": "巴黎", "address": None, "map_url": None, "note": None, "image_url": None,
+            "latitude": 48.8606, "longitude": 2.3376,
+        })
+        assert place.status_code == 201
+        assert len(client.get(f"/api/places?trip_id={second_id}").json()) == 1
+        assert all(item["trip_id"] == first_trip["id"] for item in client.get(f"/api/places?trip_id={first_trip['id']}").json())
+        assert client.delete(f"/api/trips/{second_id}").status_code == 204
+        assert client.get(f"/api/places?trip_id={second_id}").json() == []
+        assert client.get(f"/api/destinations?trip_id={second_id}").json() == []
+
+
 def teardown_module():
     engine.dispose()
     if TEST_DB.exists():

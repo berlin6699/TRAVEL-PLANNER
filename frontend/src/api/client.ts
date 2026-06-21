@@ -1,4 +1,4 @@
-import type { City, Expense, ExportPayload, Inspiration, ItineraryItem, NewItem, Place, Reservation, RouteLeg, Trip } from '../types'
+import type { City, Destination, Expense, ExportPayload, Inspiration, ItineraryItem, NewItem, Place, Reservation, RouteLeg, Trip } from '../types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '')
 
@@ -24,7 +24,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 const resource = <T extends { id: number }>(path: string) => ({
-  list: () => request<T[]>(path),
+  list: (params?: Record<string, string | number | boolean | null | undefined>) => {
+    const query = new URLSearchParams()
+    Object.entries(params||{}).forEach(([key,value])=>{if(value!==null&&value!==undefined&&value!=='')query.set(key,String(value))})
+    return request<T[]>(`${path}${query.size?`?${query}`:''}`)
+  },
   create: (data: NewItem<T>) => request<T>(path, { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: NewItem<T>) => request<T>(`${path}/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id: number) => request<void>(`${path}/${id}`, { method: 'DELETE' }),
@@ -35,6 +39,8 @@ export const api = {
     get: () => request<Trip>('/trip'),
     update: (data: Omit<Trip, 'id'>) => request<Trip>('/trip', { method: 'PUT', body: JSON.stringify(data) }),
   },
+  trips: resource<Trip>('/trips'),
+  destinations: resource<Destination>('/destinations'),
   cities: resource<City>('/cities'),
   itinerary: resource<ItineraryItem>('/itinerary'),
   reservations: resource<Reservation>('/reservations'),

@@ -7,7 +7,7 @@ from database import Base
 class TripInfo(Base):
     __tablename__ = "trip_info"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(120))
     start_date: Mapped[object] = mapped_column(Date)
     end_date: Mapped[object] = mapped_column(Date)
@@ -15,11 +15,25 @@ class TripInfo(Base):
     currency: Mapped[str] = mapped_column(String(3), default="CNY")
 
 
+class Destination(Base):
+    __tablename__ = "destinations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    type: Mapped[str] = mapped_column(String(20), default="国家")
+    code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("destinations.id", ondelete="SET NULL"), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class City(Base):
     __tablename__ = "cities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
+    destination_id: Mapped[int | None] = mapped_column(ForeignKey("destinations.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
     country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
@@ -34,6 +48,7 @@ class ItineraryItem(Base):
     __tablename__ = "itinerary_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
     title: Mapped[str] = mapped_column(String(160))
     date: Mapped[object] = mapped_column(Date, index=True)
     start_time: Mapped[object] = mapped_column(Time)
@@ -56,6 +71,7 @@ class Reservation(Base):
     __tablename__ = "reservations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
     name: Mapped[str] = mapped_column(String(160))
     type: Mapped[str] = mapped_column(String(20), index=True)
     date: Mapped[object] = mapped_column(Date, index=True)
@@ -74,6 +90,7 @@ class Inspiration(Base):
     __tablename__ = "inspirations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
     title: Mapped[str] = mapped_column(String(160))
     platform: Mapped[str] = mapped_column(String(20), index=True)
     url: Mapped[str] = mapped_column(Text)
@@ -88,6 +105,7 @@ class Place(Base):
     __tablename__ = "places"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
     name: Mapped[str] = mapped_column(String(160))
     type: Mapped[str] = mapped_column(String(20), index=True)
     city: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -104,6 +122,7 @@ class RouteLeg(Base):
     __tablename__ = "route_legs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
     title: Mapped[str] = mapped_column(String(160))
     from_place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"), index=True)
     to_place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"), index=True)
@@ -119,6 +138,7 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trip_info.id", ondelete="CASCADE"), default=1, index=True)
     title: Mapped[str] = mapped_column(String(160))
     amount: Mapped[object] = mapped_column(Numeric(12, 2))
     currency: Mapped[str] = mapped_column(String(3), default="CNY")

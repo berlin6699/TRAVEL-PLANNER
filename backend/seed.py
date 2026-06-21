@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from models import City, Expense, Inspiration, ItineraryItem, Place, Reservation, RouteLeg, TripInfo
+from models import City, Destination, Expense, Inspiration, ItineraryItem, Place, Reservation, RouteLeg, TripInfo
 
 
 CITY_COORDINATES = {
@@ -31,8 +31,12 @@ def seed_database(db: Session) -> None:
     db.add(trip)
     db.flush()
 
-    kyoto_city = City(trip_id=1, name="京都", country="日本", order_index=0, arrival_date=start, departure_date=start + timedelta(days=3), latitude=Decimal("35.011600"), longitude=Decimal("135.768100"), note="关西古都与寺院散步")
-    tokyo_city = City(trip_id=1, name="东京", country="日本", order_index=1, arrival_date=start + timedelta(days=3), departure_date=end, latitude=Decimal("35.676200"), longitude=Decimal("139.650300"), note="都市街区与下町体验")
+    japan = Destination(trip_id=1, name="日本", type="国家", code="JP", order_index=0, note="本次旅程的主要目的地")
+    db.add(japan)
+    db.flush()
+
+    kyoto_city = City(trip_id=1, destination_id=japan.id, name="京都", country="日本", order_index=0, arrival_date=start, departure_date=start + timedelta(days=3), latitude=Decimal("35.011600"), longitude=Decimal("135.768100"), note="关西古都与寺院散步")
+    tokyo_city = City(trip_id=1, destination_id=japan.id, name="东京", country="日本", order_index=1, arrival_date=start + timedelta(days=3), departure_date=end, latitude=Decimal("35.676200"), longitude=Decimal("139.650300"), note="都市街区与下町体验")
     db.add_all([kyoto_city, tokyo_city])
     db.flush()
 
@@ -118,6 +122,19 @@ def migrate_existing_city_data(db: Session) -> None:
             db.add(City(trip_id=1, name=name, country="日本", order_index=index, latitude=lat, longitude=lng))
         db.flush()
         cities = list(db.scalars(select(City).order_by(City.order_index, City.id)))
+    destinations = list(db.scalars(select(Destination).order_by(Destination.order_index, Destination.id)))
+    if not destinations:
+        countries = list(dict.fromkeys(city.country or "未分组地区" for city in cities))
+        for index, country in enumerate(countries):
+            db.add(Destination(trip_id=1, name=country, type="国家" if country != "未分组地区" else "地区", order_index=index))
+        db.flush()
+        destinations = list(db.scalars(select(Destination).order_by(Destination.order_index, Destination.id)))
+    destination_by_name = {destination.name: destination for destination in destinations}
+    for city in cities:
+        if not city.destination_id:
+            destination = destination_by_name.get(city.country or "未分组地区")
+            if destination:
+                city.destination_id = destination.id
     city_by_name = {city.name: city for city in cities}
     known_places = {
         "京都站前酒店": (Decimal("34.985849"), Decimal("135.758767")),
