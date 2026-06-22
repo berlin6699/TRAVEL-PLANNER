@@ -33,10 +33,17 @@
   .guide-section > div:first-child, .guide-day, .guide-block { break-inside: avoid; page-break-inside: avoid; }
 }
 @layer components {
-  .card { @apply rounded-3xl border border-white/90 bg-white/90 shadow-card backdrop-blur-sm; }
+  .card { min-width: 0; max-width: 100%; @apply rounded-3xl border border-white/90 bg-white/90 shadow-card backdrop-blur-sm; }
   .interactive-card { @apply transition duration-300 hover:-translate-y-1 hover:border-coral-100 hover:shadow-float; }
   .primary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-coral-500 to-[#ff9572] px-4 py-2.5 text-sm font-semibold text-white shadow-coral transition duration-300 hover:-translate-y-0.5 hover:brightness-105 disabled:hover:translate-y-0 disabled:hover:brightness-100; }
   .secondary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-stone-600 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-coral-200 hover:bg-coral-50 hover:text-coral-700; }
   .glass-panel { @apply border border-white/80 bg-white/75 shadow-card backdrop-blur-xl; }
   .template-description { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .modal-scroll { -webkit-overflow-scrolling: touch; scrollbar-gutter: stable; }
+  [role="listbox"] { max-height: min(60dvh, 32rem); overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  aside nav { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+}
+@media (max-width: 640px) {
+  .modal-scroll input, .modal-scroll select, .modal-scroll textarea { font-size: 16px; }
+  .modal-scroll iframe { height: 42dvh !important; min-height: 16rem !important; }
 }
