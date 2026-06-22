@@ -22,10 +22,21 @@
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #ff7a61; outline-offset: 3px; }
   * { scrollbar-color: rgba(120, 113, 108, .28) transparent; scrollbar-width: thin; }
 }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  html, body, #root { width: auto; max-width: none; overflow: visible; background: #fff !important; }
+  aside, main > div:first-child, body nav, .no-print { display: none !important; }
+  main { min-height: 0 !important; padding-left: 0 !important; overflow: visible !important; }
+  main > div:nth-child(2) { max-width: none !important; padding: 0 !important; }
+  .guide-sheet { width: 100% !important; max-width: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  .guide-cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .guide-section > div:first-child, .guide-day, .guide-block { break-inside: avoid; page-break-inside: avoid; }
+}
 @layer components {
   .card { @apply rounded-3xl border border-white/90 bg-white/90 shadow-card backdrop-blur-sm; }
   .interactive-card { @apply transition duration-300 hover:-translate-y-1 hover:border-coral-100 hover:shadow-float; }
   .primary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-coral-500 to-[#ff9572] px-4 py-2.5 text-sm font-semibold text-white shadow-coral transition duration-300 hover:-translate-y-0.5 hover:brightness-105 disabled:hover:translate-y-0 disabled:hover:brightness-100; }
   .secondary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-stone-600 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-coral-200 hover:bg-coral-50 hover:text-coral-700; }
   .glass-panel { @apply border border-white/80 bg-white/75 shadow-card backdrop-blur-xl; }
+  .template-description { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 }
