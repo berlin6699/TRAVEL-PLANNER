@@ -21,6 +21,7 @@
   button, a { -webkit-tap-highlight-color: transparent; }
   button:disabled { cursor: not-allowed; opacity: .55; }
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #ff7a61; outline-offset: 3px; }
+  svg.lucide { flex-shrink: 0; shape-rendering: geometricPrecision; }
   * { scrollbar-color: rgba(120, 113, 108, .28) transparent; scrollbar-width: thin; }
 }
 @layer utilities {
@@ -30,7 +31,37 @@
 @layer components {
   .card { @apply rounded-3xl border border-white/90 bg-white/90 shadow-card backdrop-blur-sm; }
   .interactive-card { @apply transition duration-300 hover:-translate-y-1 hover:border-coral-100 hover:shadow-float; }
-  .primary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-coral-500 to-[#ff9572] px-4 py-2.5 text-sm font-semibold text-white shadow-coral transition duration-300 hover:-translate-y-0.5 hover:brightness-105 disabled:hover:translate-y-0 disabled:hover:brightness-100; }
-  .secondary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-stone-600 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-coral-200 hover:bg-coral-50 hover:text-coral-700; }
+  .pressable-card { transform: translateZ(0); -webkit-touch-callout: none; }
+  .pressable-card:active { transform: scale(.975); }
+  .primary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-coral-500 to-[#ff9572] px-4 py-2.5 text-sm font-semibold text-white shadow-coral transition duration-300 hover:-translate-y-0.5 hover:brightness-105 active:scale-[.97] disabled:hover:translate-y-0 disabled:hover:brightness-100; }
+  .secondary-btn { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-stone-600 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-coral-200 hover:bg-coral-50 hover:text-coral-700 active:scale-[.97]; }
   .glass-panel { @apply border border-white/80 bg-white/75 shadow-card backdrop-blur-xl; }
+  .page-enter { animation: page-enter .36s cubic-bezier(.22,.8,.24,1) both; }
+  .menu-pop { transform-origin: top left; animation: menu-pop .2s cubic-bezier(.2,.8,.2,1) both; }
+  .modal-backdrop { animation: fade-in .2s ease-out both; }
+  .modal-panel { animation: modal-enter .3s cubic-bezier(.2,.9,.25,1) both; }
+  .drawer-enter aside { animation: drawer-enter .28s cubic-bezier(.2,.8,.2,1) both; }
+  .icon-float { animation: icon-float 3.2s ease-in-out infinite; }
+  .mobile-nav-link span { transition: transform .25s ease, background-color .25s ease, box-shadow .25s ease; }
+  .mobile-nav-link:active span { transform: scale(.88); }
+  .mobile-nav-active span { transform: translateY(-2px); background: linear-gradient(135deg,#fff3ef,#ffe4dc); box-shadow: 0 7px 18px -10px rgba(255,122,97,.85); }
+  .reservation-card { transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease; }
+  .reservation-card:hover { transform: translateY(-3px); border-color: #ffe4dc; box-shadow: 0 20px 48px -25px rgba(52,43,34,.3); }
+  .stagger-list > * { animation: card-rise .4s cubic-bezier(.2,.8,.2,1) both; }
+  .stagger-list > *:nth-child(2) { animation-delay: 45ms; }
+  .stagger-list > *:nth-child(3) { animation-delay: 90ms; }
+  .stagger-list > *:nth-child(4) { animation-delay: 135ms; }
+  .stagger-list > *:nth-child(n+5) { animation-delay: 160ms; }
+}
+
+@keyframes page-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes card-rise { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-enter { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes menu-pop { from { opacity: 0; transform: translateY(-6px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes drawer-enter { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes icon-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

@@ -11,6 +11,8 @@
 - 导入电脑端导出的完整 ZIP / JSON 备份
 - 导出包含 PDF 的完整 ZIP，并通过 Android 分享面板保存
 - 原生打开 PDF 附件
+- 首页概览与待办卡片可直达对应日程、预约和支出页面
+- 预约类型使用稳定的本地图标，并针对手机端优化触控反馈与页面动效
 
 ## 开发
 
@@ -37,6 +39,8 @@ npm run android:apk
 ```
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`。
+
+仓库内最新版安装包：`releases/TravelPlanner-v1.1-debug.apk`。
 
 ## 从电脑端迁移数据
 
