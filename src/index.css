@@ -35,6 +35,36 @@
 }
 @layer components {
   .card { min-width: 0; max-width: 100%; @apply rounded-3xl border border-white/90 bg-white/90 shadow-card backdrop-blur-sm; }
+  .page-heading {
+    position: relative; min-width: 0; overflow: hidden;
+    @apply rounded-[2rem] border border-stone-200/70 px-5 py-6 shadow-card backdrop-blur-sm sm:px-7 sm:py-7;
+    background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(255,248,242,.94) 58%, rgba(238,249,246,.9));
+  }
+  .page-heading::before { content: ''; position: absolute; inset: 1.25rem auto 1.25rem 0; width: 4px; border-radius: 0 999px 999px 0; background: linear-gradient(#ff7a61,#53c9a5); }
+  .page-heading::after { content: ''; position: absolute; width: 10rem; height: 10rem; right: -4rem; top: -5rem; border-radius: 999px; border: 1.5rem solid rgba(255,122,97,.07); }
+  .control-panel { min-width: 0; @apply rounded-3xl border border-stone-200/80 bg-stone-100/70 p-4 shadow-inner shadow-stone-200/30 sm:p-5; }
+  .section-card { position: relative; min-width: 0; max-width: 100%; overflow: hidden; @apply rounded-3xl border bg-white/95 shadow-card; }
+  .section-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--section-accent, linear-gradient(90deg,#ff7a61,#ffb057)); }
+  .section-coral { --section-accent: linear-gradient(90deg,#ff7a61,#ffb057); border-color: rgba(255,122,97,.18); background: linear-gradient(180deg,rgba(255,247,244,.96),rgba(255,255,255,.96) 5rem); }
+  .section-mint { --section-accent: linear-gradient(90deg,#53c9a5,#79d8c0); border-color: rgba(83,201,165,.2); background: linear-gradient(180deg,rgba(241,252,248,.97),rgba(255,255,255,.96) 5rem); }
+  .section-sky { --section-accent: linear-gradient(90deg,#75b8e8,#7bd4c0); border-color: rgba(117,184,232,.2); background: linear-gradient(180deg,rgba(243,249,255,.97),rgba(255,255,255,.96) 5rem); }
+  .feature-panel { position: relative; min-width: 0; overflow: hidden; @apply rounded-3xl border p-5 shadow-sm sm:p-6; }
+  .feature-mint { border-color: rgba(83,201,165,.22); background: linear-gradient(135deg,rgba(239,252,247,.95),rgba(255,255,255,.96) 55%,rgba(242,249,255,.96)); }
+  .feature-sky { border-color: rgba(117,184,232,.23); background: linear-gradient(135deg,rgba(241,248,255,.97),rgba(255,255,255,.97) 55%,rgba(239,252,247,.92)); }
+  .summary-panel { position: relative; min-width: 0; overflow: hidden; @apply rounded-3xl border border-skysoft-100 p-6 shadow-card sm:p-7; background: linear-gradient(135deg,#eef8ff,#fff 46%,#eefbf7); }
+  .summary-panel::after { content: ''; position: absolute; width: 8rem; height: 8rem; right: -3rem; bottom: -5rem; border-radius: 999px; background: rgba(83,201,165,.12); }
+  .info-strip { @apply rounded-2xl border border-skysoft-100 bg-skysoft-50/70 px-4 py-3 text-sm text-stone-600; }
+  .content-list { min-width: 0; max-width: 100%; @apply overflow-hidden rounded-3xl border border-stone-200/70 bg-white/95 shadow-card; }
+  .content-card { border-color: rgba(214,211,209,.75) !important; background-color: rgba(255,255,255,.96) !important; }
+  .empty-state { min-width: 0; max-width: 100%; @apply rounded-3xl border-2 border-dashed border-stone-200 bg-white/65 shadow-sm backdrop-blur-sm; }
+  .stat-card { border-color: rgba(214,211,209,.65); background: linear-gradient(145deg,rgba(255,255,255,.98),rgba(250,248,244,.95)); }
+  .stat-card::before { content: ''; position: absolute; inset: 0 1.5rem auto; height: 3px; border-radius: 0 0 999px 999px; background: linear-gradient(90deg,#ff7a61,#ffc071); opacity: .75; }
+  .stat-card:nth-child(2n)::before { background: linear-gradient(90deg,#53c9a5,#8cdbc7); }
+  .stat-card:nth-child(3n)::before { background: linear-gradient(90deg,#75b8e8,#8bd8c4); }
+  main article.card, .card.divide-y { border-color: rgba(214,211,209,.75); background-color: rgba(255,255,255,.97); }
+  main section.card { border-color: rgba(255,122,97,.16); background: linear-gradient(180deg,rgba(255,248,245,.96),rgba(255,255,255,.96) 5rem); }
+  main section.card + section.card { border-color: rgba(117,184,232,.2); background: linear-gradient(180deg,rgba(243,249,255,.96),rgba(255,255,255,.96) 5rem); }
+  .date-heading { @apply mb-3 flex items-end justify-between gap-3 rounded-2xl border border-stone-200/70 bg-stone-100/70 px-4 py-3; }
   .interactive-card { @apply transition duration-300 hover:-translate-y-1 hover:border-coral-100 hover:shadow-float; }
   .pressable-card { transform: translateZ(0); -webkit-touch-callout: none; }
   .pressable-card:active { transform: scale(.975); }
@@ -53,7 +83,7 @@
   .mobile-nav-link span { transition: transform .25s ease, background-color .25s ease, box-shadow .25s ease; }
   .mobile-nav-link:active span { transform: scale(.88); }
   .mobile-nav-active span { transform: translateY(-2px); background: linear-gradient(135deg,#fff3ef,#ffe4dc); box-shadow: 0 7px 18px -10px rgba(255,122,97,.85); }
-  .reservation-card { transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease; }
+  .reservation-card { border-color: rgba(214,211,209,.75); background: rgba(255,255,255,.97); transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease; }
   .reservation-card:hover { transform: translateY(-3px); border-color: #ffe4dc; box-shadow: 0 20px 48px -25px rgba(52,43,34,.3); }
   .dashboard-section { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
   .template-description { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }

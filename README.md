@@ -43,7 +43,7 @@ npm run android:apk
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`。
 
-仓库内最新版安装包：`releases/TravelPlanner-v1.3-debug.apk`。
+仓库内最新版安装包：`releases/TravelPlanner-v1.4-debug.apk`。
 
 ## 从电脑端迁移数据
 
