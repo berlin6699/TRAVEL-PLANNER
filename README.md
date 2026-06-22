@@ -13,6 +13,9 @@
 - 原生打开 PDF 附件
 - 首页概览与待办卡片可直达对应日程、预约和支出页面
 - 预约类型使用稳定的本地图标，并针对手机端优化触控反馈与页面动效
+- 可跨旅程复用基础随身、洗漱、摄影、药品和出发前待办模板
+- 生成不包含预约号、附件、预算和支出的公开攻略 PDF
+- 全新的自适应 Android 应用图标
 
 ## 开发
 
@@ -40,7 +43,7 @@ npm run android:apk
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`。
 
-仓库内最新版安装包：`releases/TravelPlanner-v1.1-debug.apk`。
+仓库内最新版安装包：`releases/TravelPlanner-v1.2-debug.apk`。
 
 ## 从电脑端迁移数据
 
