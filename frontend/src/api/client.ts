@@ -55,6 +55,7 @@ export const api = {
     upload: (reservationId: number, file: File) => { const form=new FormData();form.append('file',file);return request<ReservationAttachment>(`/reservations/${reservationId}/attachments`,{method:'POST',body:form}) },
     remove: (id: number) => request<void>(`/reservation-attachments/${id}`,{method:'DELETE'}),
     fileUrl: (id: number) => `${BASE_URL}/reservation-attachments/${id}/file`,
+    open: async (id: number) => { window.open(`${BASE_URL}/reservation-attachments/${id}/file`,'_blank','noopener,noreferrer') },
   },
   inspirations: resource<Inspiration>('/inspirations'),
   places: resource<Place>('/places'),
