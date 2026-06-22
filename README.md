@@ -1,136 +1,62 @@
 # Travel Planner / 旅途
 
-一个完全在本地运行的旅行行程管理网页端。它可以管理日程、预约、攻略灵感、地点、消费、行李清单、待办与旅行预算，所有数据都保存在本机 SQLite 数据库中。
-
-- 每笔消费可记录人民币、美元、欧元、英镑等原币金额和折算汇率；预算与总支出统一按人民币汇总。
-- 日程、预约和地点中的地图可在当前页面弹窗预览，同时保留外部地图链接作为兼容兜底。
-- 支持创建和切换多个独立旅程；每个旅程按“国家 / 地区 → 城市 → 地点 / 日程 / 预约”组织。
-- 城市与路线页使用 OpenStreetMap 交互底图标出地点相对位置；路线支持步行、公交、驾车、火车、大巴、飞机等方案，并可关联自己的交通预约。
-- 新增城市或地点时可搜索 OpenStreetMap 地名并从候选结果中确认坐标；断网时仍可手动填写或留空。
-- 预约可上传多个车票、景点门票或确认单 PDF；文件经过格式与大小校验后保存在本地持久化存储中。
-- 行前清单分为行李和待办，可记录分类、数量、截止日期并勾选完成状态。
-- 行前清单提供可跨旅程复用的基础随身、洗漱、摄影、药品和出发前待办模板；打开模板后可逐项编辑、增删，再确认添加，已存在项目不会重复写入。
-- 设置页可生成适合分享的公开攻略 PDF，仅包含逐日行程、路线、地点和准备清单，自动排除预约号、附件、预算、支出及私人备注。
-
-## 使用 Docker 启动（推荐）
-
-需要安装并启动 Docker Desktop。在项目根目录执行：
-
-```powershell
-docker compose up --build -d
-```
-
-启动完成后访问 `http://localhost:8080`；如果根目录 `.env` 覆盖了端口，则使用其中的 `TRAVEL_PLANNER_PORT`。当前工作区因本机端口冲突已配置为 `http://localhost:8088`。网页和 API 由同一个地址提供，Nginx 会把 `/api` 请求转发给 FastAPI 容器。
-
-常用管理命令：
-
-```powershell
-# 查看状态
-docker compose ps
-
-# 查看日志
-docker compose logs -f
-
-# 停止服务（保留数据）
-docker compose down
-
-# 再次启动
-docker compose up -d
-```
-
-SQLite 数据保存在名为 `travel-planner-data` 的 Docker 卷中。`docker compose down`、更新镜像或重建容器都不会删除它。只有明确执行下面的命令才会连同数据库一起删除：
-
-预约 PDF 位于同一个 Docker 卷的 `/data/uploads`。设置页导出的完整 ZIP 同时包含 `travel-planner.json` 和全部 PDF，可直接导入恢复；旧版纯 JSON 仍可导入，但不包含 PDF。
-
-```powershell
-docker compose down -v
-```
-
-默认网页端口为 `8080`。需要更改时，把 `.env.example` 复制为 `.env` 并修改 `TRAVEL_PLANNER_PORT`，或者临时执行：
-
-```powershell
-$env:TRAVEL_PLANNER_PORT="3000"
-docker compose up -d
-```
+统一维护网页端和 Android App 的旅行规划项目。两个客户端采用相同的旅行数据结构，支持多旅程、城市日程、预约与票据、路线、灵感、记账、行李清单、可复用模板和公开攻略 PDF。
 
 ## 项目结构
 
 ```text
-旅行APP/
-├─ frontend/              React + Vite + TypeScript + Tailwind CSS
-│  └─ src/
-│     ├─ api/             REST API 客户端
-│     ├─ components/      布局、弹窗、表单和基础 UI
-│     ├─ hooks/           数据加载 Hook
-│     ├─ pages/           首页、日程、预约、灵感、地图、清单、记账与设置页面
-│     └─ types/           TypeScript 数据类型
-├─ backend/               FastAPI + SQLAlchemy
-│  ├─ main.py             API 入口
-│  ├─ models.py           SQLite 数据模型
-│  ├─ schemas.py          请求、响应与校验模型
-│  ├─ seed.py             首次启动演示数据
-│  └─ tests/              API 自动化测试
+TRAVEL-PLANNER/
+├─ app/                   Android App
+│  ├─ android/            Capacitor Android 原生工程
+│  ├─ src/                React + TypeScript 客户端
+│  ├─ releases/           可直接安装的 APK
+│  └─ README.md           App 开发与构建说明
+├─ web/                   网页端
+│  ├─ frontend/           React + Vite + TypeScript
+│  ├─ backend/            FastAPI + SQLite
+│  ├─ compose.yaml        Docker Compose 配置
+│  └─ README.md           网页端部署与开发说明
 └─ README.md
 ```
 
-## 启动后端
+## Android App
 
-需要 Python 3.11 或更高版本。
-
-```powershell
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-macOS / Linux 激活环境使用：
+App 的数据完全保存在手机本地，可离线使用，不依赖 Docker 或网页后端。
 
 ```bash
-source .venv/bin/activate
-```
-
-后端地址为 `http://localhost:8000`，交互式 API 文档位于 `http://localhost:8000/docs`。
-
-## 启动前端
-
-另开一个终端：
-
-```powershell
-cd frontend
+cd app
 npm install
-npm run dev
-```
-
-浏览器打开 `http://localhost:5173`。如需修改 API 地址，启动前设置 `VITE_API_BASE_URL`，值需要包含 `/api`。
-
-## 数据库与示例数据
-
-数据库文件在 `backend/travel_planner.db`。首次启动后端时会自动建表，并生成一趟约 30 天后开始的京都 / 东京 8 日演示旅行。清空数据库后会保留一条空白旅行设置，重启不会再次灌入演示数据。
-
-不要在后端运行期间手动修改 SQLite 文件。要迁移或备份数据，请使用设置页的 JSON 功能。
-
-## 导入、导出与清空
-
-- 设置页点击“导出完整备份 ZIP”，浏览器会下载旅程数据及全部预约 PDF。
-- 点击“导出公开攻略”可预览适合分享的版本，再通过浏览器“另存为 PDF”。
-- 点击“导入备份恢复”可选择完整 ZIP 或旧版 JSON。ZIP 会校验路径、体积、数据关联及每个 PDF 后再恢复。
-- “清空本地数据库”需要连续确认两次，随后删除全部业务记录并保留空白旅行设置。
-
-## 测试与构建
-
-```powershell
-cd backend
-pytest
-
-cd ..\frontend
 npm test
 npm run build
+npm run android:apk
 ```
 
-## 后续扩展 iOS App
+最新版 APK：[`app/releases/TravelPlanner-v1.4-debug.apk`](app/releases/TravelPlanner-v1.4-debug.apk)
 
-后端 REST API 与网页端解耦，未来 Swift / SwiftUI 客户端可以直接复用 `/api/trip`、`/api/itinerary`、`/api/reservations`、`/api/inspirations`、`/api/places`、`/api/expenses`、`/api/checklist` 以及导入导出接口。届时主要新增：面向局域网或云端的部署方式、HTTPS、用户认证和 iOS 网络层；现有业务数据结构与 CRUD 语义可以继续使用。
+更多说明见 [`app/README.md`](app/README.md)。
 
-多旅程客户端应优先使用 `/api/trips` 和 `/api/destinations`，并在其他列表接口中传入 `trip_id`，以保证不同旅程的数据相互隔离。
+## 网页端
+
+使用 Docker 启动完整网页端：
+
+```bash
+cd web
+docker compose up --build -d
+```
+
+默认访问地址：`http://localhost:8080`。
+
+也可以分别启动 FastAPI 后端和 Vite 前端，详见 [`web/README.md`](web/README.md)。
+
+## App 与网页端迁移数据
+
+目前两个客户端采用 ZIP / JSON 备份互导，不进行云端实时同步：
+
+1. 在一个客户端的“设置”中导出完整备份 ZIP。
+2. 把 ZIP 传到另一台设备。
+3. 在另一个客户端选择“导入备份恢复”。
+4. 旅程数据和预约 PDF 会一起恢复。
+
+## 仓库说明
+
+本仓库已合并原 `TRAVEL-PLANNER-Android-APP` 的完整 Git 历史。今后的 App 与网页端更新都在本仓库进行，旧 Android 仓库仅作为迁移前的历史入口保留。

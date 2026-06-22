@@ -1,6 +1,6 @@
-# TRAVEL-PLANNER Android App
+# Travel Planner Android App
 
-“旅途”Android 客户端，面向红米及其他 Android 7+ 手机。App 基于 Capacitor 8、React、TypeScript 与 IndexedDB，数据完全保存在手机本地，不依赖电脑、Docker 或云端服务器。
+“旅途”Android 客户端，位于统一仓库的 `app/` 目录，面向红米及其他 Android 7+ 手机。App 基于 Capacitor 8、React、TypeScript 与 IndexedDB，数据完全保存在手机本地，不依赖电脑、Docker 或云端服务器。
 
 ## 已支持
 
