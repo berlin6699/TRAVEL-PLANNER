@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowUpRight, BedDouble, CircleHelp, ExternalLink, Inbox, Landmark, LoaderCircle, MapPin, Plane, Plus, Sparkles, TrainFront, UtensilsCrossed, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReservationType } from '../types'
@@ -16,13 +17,16 @@ export function StatCard({ label, value, note, icon, to }: { label: string; valu
 }
 
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(()=>{if(!open)return;const previous=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.body.style.overflow=previous}},[open])
   if (!open) return null
-  return <div className="modal-backdrop fixed inset-0 z-[1200] flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-md" onMouseDown={onClose}>
-    <div role="dialog" aria-modal="true" className="modal-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white/95 shadow-[0_30px_90px_-20px_rgba(28,25,23,.45)] backdrop-blur-xl" onMouseDown={e => e.stopPropagation()}>
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100/80 bg-white/90 px-6 py-5 backdrop-blur-xl"><div><p className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-coral-500"><Sparkles size={11}/>Travel planner</p><h2 className="text-xl font-bold">{title}</h2></div><button aria-label="关闭" onClick={onClose} className="rounded-full border border-stone-100 bg-white p-2 text-stone-500 shadow-sm transition hover:rotate-90 hover:bg-stone-100"><X size={20}/></button></div>
-      <div className="p-6">{children}</div>
+  return createPortal(<div className="modal-backdrop fixed inset-0 z-[1200] overflow-hidden bg-stone-950/45 backdrop-blur-md">
+    <div className="flex h-[100dvh] items-end justify-center sm:items-center sm:p-4" onMouseDown={onClose}>
+    <div role="dialog" aria-modal="true" aria-label={title} className="modal-panel flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[2rem] border border-white/80 bg-white/95 shadow-[0_30px_90px_-20px_rgba(28,25,23,.45)] backdrop-blur-xl sm:max-h-[92dvh] sm:rounded-[2rem]" onMouseDown={e => e.stopPropagation()}>
+      <div className="z-10 flex shrink-0 items-center justify-between border-b border-stone-100/80 bg-white/95 px-4 py-4 backdrop-blur-xl sm:px-6 sm:py-5"><div className="min-w-0"><p className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-coral-500"><Sparkles size={11}/>Travel planner</p><h2 className="truncate text-xl font-bold">{title}</h2></div><button aria-label="关闭" onClick={onClose} className="ml-3 shrink-0 rounded-full border border-stone-100 bg-white p-2 text-stone-500 shadow-sm transition hover:rotate-90 hover:bg-stone-100"><X size={20}/></button></div>
+      <div className="modal-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:p-6">{children}</div>
     </div>
-  </div>
+    </div>
+  </div>,document.body)
 }
 
 const fieldClass = 'mt-1.5 w-full rounded-xl border border-stone-200/90 bg-stone-50/60 px-3.5 py-2.5 text-sm shadow-inner shadow-stone-100/50 outline-none transition focus:border-coral-400 focus:bg-white focus:ring-4 focus:ring-coral-100'
