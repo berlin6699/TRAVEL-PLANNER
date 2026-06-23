@@ -1,0 +1,112 @@
+name: Build App Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example app-v1.5.1
+        required: true
+        default: app-v1.5.1
+  push:
+    tags:
+      - 'app-v*'
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npm run android:sync
+      - run: cd android && ./gradlew assembleDebug
+      - run: |
+          version="${RELEASE_TAG#app-v}"
+          mkdir -p release
+          cp android/app/build/outputs/apk/debug/app-debug.apk "release/TravelPlanner-v${version}-debug.apk"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Travel Planner App ${{ env.RELEASE_TAG }}
+          files: app/release/*
+          fail_on_unmatched_files: true
+          overwrite_files: true
+
+  macos:
+    name: macOS DMG and ZIP
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run desktop:mac:arm64
+      - run: npm run desktop:mac:x64
+      - run: |
+          version="${RELEASE_TAG#app-v}"
+          mkdir -p release
+          cp "desktop-dist/旅途 Travel Planner-${version}-arm64.dmg" "release/TravelPlanner-v${version}-mac-arm64.dmg"
+          cp "desktop-dist/旅途 Travel Planner-${version}-arm64-mac.zip" "release/TravelPlanner-v${version}-mac-arm64.zip"
+          cp "desktop-dist/旅途 Travel Planner-${version}.dmg" "release/TravelPlanner-v${version}-mac-x64.dmg"
+          cp "desktop-dist/旅途 Travel Planner-${version}-mac.zip" "release/TravelPlanner-v${version}-mac-x64.zip"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Travel Planner App ${{ env.RELEASE_TAG }}
+          files: app/release/*
+          fail_on_unmatched_files: true
+          overwrite_files: true
+
+  windows:
+    name: Windows Installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run desktop:win
+      - shell: pwsh
+        run: |
+          $version = $env:RELEASE_TAG -replace '^app-v', ''
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item "desktop-dist/旅途 Travel Planner Setup $version.exe" "release/TravelPlanner-Setup-v$version-win-x64.exe"
+          Copy-Item "desktop-dist/旅途 Travel Planner-$version-win.zip" "release/TravelPlanner-v$version-win-x64.zip"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Travel Planner App ${{ env.RELEASE_TAG }}
+          files: app/release/*
+          fail_on_unmatched_files: true
+          overwrite_files: true
