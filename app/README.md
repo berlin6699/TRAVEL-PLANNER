@@ -46,7 +46,7 @@ npm run android:apk
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`。
 
-仓库内最新版安装包：`releases/TravelPlanner-v1.4-debug.apk`。
+最新版 Android APK、macOS 和 Windows 安装包集中放在 GitHub Release：[`app-v1.5.0`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.0)。
 
 ## iPhone
 
@@ -82,7 +82,7 @@ npm run desktop:mac
 npm run desktop:win
 ```
 
-输出位置：`desktop-dist/`。该目录是本地构建产物，体积较大，不提交到 Git。
+输出位置：`desktop-dist/`。该目录是本地构建产物，体积较大，不提交到 Git；需要分享安装包时上传到 GitHub Release。
 
 ## 迁移数据
 

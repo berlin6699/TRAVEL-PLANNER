@@ -36,7 +36,7 @@ npm run desktop:mac
 npm run desktop:win
 ```
 
-最新版 APK：[`app/releases/TravelPlanner-v1.4-debug.apk`](app/releases/TravelPlanner-v1.4-debug.apk)
+最新版安装包集中放在 GitHub Release：[`app-v1.5.0`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.0)，包含 Android APK、macOS DMG / ZIP 和 Windows 10 x64 EXE / ZIP。
 
 更多说明见 [`app/README.md`](app/README.md)。
 
