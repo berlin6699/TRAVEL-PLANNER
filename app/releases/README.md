@@ -1,6 +1,6 @@
 # Android 安装包
 
-- 最新版 Android APK 与桌面安装包已迁移到 GitHub Release：[`app-v1.5.0`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.0)。
+- 最新版 Android APK 与桌面安装包已迁移到 GitHub Release：[`app-v1.5.1`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.1)。
 - `TravelPlanner-v1.4-debug.apk`：历史调试版，强化页面标题、控制区、摘要区和内容区的视觉层级，让各功能模块更易区分。
 - `TravelPlanner-v1.3-debug.apk`：修复全页面与弹窗滚动、弹窗裁切和移动端显示，并将模板改为编辑后确认添加。
 - `TravelPlanner-v1.2-debug.apk`：修复首页横向溢出，新增应用图标、可复用清单模板和公开攻略 PDF。

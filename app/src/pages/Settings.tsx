@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
-import { Copy, DatabaseBackup, Download, FolderOpen, HardDrive, RotateCcw, Save, Upload } from 'lucide-react'
+import { Copy, DatabaseBackup, Download, FolderOpen, HardDrive, Info, RotateCcw, Save, Upload } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { ErrorBanner, FormInput, FormSelect, Loading, PageHeader } from '../components/UI'
@@ -233,6 +233,22 @@ export default function Settings() {
             </button>
           </div>
           <p className="mt-5 rounded-xl bg-stone-50 p-3 text-xs leading-5 text-stone-400">完整 ZIP 会一起备份 PDF。建议旅程有重要修改后及时导出。</p>
+        </section>
+
+        <section className="card p-6 lg:col-span-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="rounded-xl bg-skysoft-50 p-2.5 text-sky-600"><Info size={20} /></span>
+              <div>
+                <h2 className="font-bold">应用信息</h2>
+                <p className="text-xs text-stone-400">用于确认当前安装的 App 版本</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-stone-100 bg-stone-50 px-4 py-3 text-sm">
+              <span className="mr-3 text-stone-400">当前版本</span>
+              <span className="font-extrabold text-stone-900">v{__APP_VERSION__}</span>
+            </div>
+          </div>
         </section>
 
         {desktopInfo && (
