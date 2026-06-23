@@ -6,6 +6,7 @@ web/backend/.pytest_cache/
 web/backend/travel_planner.db
 web/backend/uploads/
 web/backend/tests/test_travel.db
+app/desktop-dist/
 *.pyc
 .DS_Store
 .env

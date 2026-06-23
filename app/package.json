@@ -1,8 +1,11 @@
 {
-  "name": "travel-planner-android-app",
+  "name": "travel-planner-app",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
+  "description": "旅途旅行计划器，多端本地数据版。",
+  "author": "berlin6699",
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -10,13 +13,23 @@
     "test": "vitest run",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
-    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug"
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:open": "cap open ios",
+    "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:mac": "npm run desktop:mac:arm64",
+    "desktop:mac:arm64": "npm run build && electron-builder --mac dmg zip --arm64",
+    "desktop:mac:x64": "npm run build && electron-builder --mac dmg zip --x64",
+    "desktop:win": "npm run build && electron-builder --win nsis zip --x64",
+    "desktop:dist": "npm run desktop:mac && npm run desktop:win"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
     "@capacitor/core": "^8.4.1",
     "@capacitor/file-viewer": "^2.0.1",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/ios": "^8.4.1",
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
@@ -40,12 +53,65 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "latest",
     "postcss": "latest",
     "tailwindcss": "3.4.17",
     "typescript": "latest",
     "vite": "latest",
-    "vitest": "latest"
+    "vitest": "latest",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.berlin6699.travelplanner",
+    "productName": "旅途 Travel Planner",
+    "copyright": "Copyright © 2026 berlin6699",
+    "directories": {
+      "output": "desktop-dist"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "desktop/main.cjs"
+    },
+    "mac": {
+      "category": "public.app-category.travel",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "assets/desktop-icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/desktop-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "旅途 Travel Planner",
+      "uninstallDisplayName": "旅途 Travel Planner"
+    }
   }
 }

@@ -1,13 +1,15 @@
 # Travel Planner / 旅途
 
-统一维护网页端和 Android App 的旅行规划项目。两个客户端采用相同的旅行数据结构，支持多旅程、城市日程、预约与票据、路线、灵感、记账、行李清单、可复用模板和公开攻略 PDF。
+统一维护网页端和多端 App 的旅行规划项目。两个客户端采用相同的旅行数据结构，支持多旅程、城市日程、预约与票据、路线、灵感、记账、行李清单、可复用模板和公开攻略 PDF。
 
 ## 项目结构
 
 ```text
 TRAVEL-PLANNER/
-├─ app/                   Android App
+├─ app/                   Android / iPhone / macOS / Windows App
 │  ├─ android/            Capacitor Android 原生工程
+│  ├─ ios/                Capacitor iOS 原生工程
+│  ├─ desktop/            Electron 桌面端入口
 │  ├─ src/                React + TypeScript 客户端
 │  ├─ releases/           可直接安装的 APK
 │  └─ README.md           App 开发与构建说明
@@ -19,9 +21,9 @@ TRAVEL-PLANNER/
 └─ README.md
 ```
 
-## Android App
+## 多端 App
 
-App 的数据完全保存在手机本地，可离线使用，不依赖 Docker 或网页后端。
+App 的数据完全保存在当前设备本地，可离线使用，不依赖 Docker 或网页后端。macOS / Windows 桌面版可以在“设置”中查看并打开本机数据保存路径。
 
 ```bash
 cd app
@@ -29,6 +31,9 @@ npm install
 npm test
 npm run build
 npm run android:apk
+npm run ios:sync
+npm run desktop:mac
+npm run desktop:win
 ```
 
 最新版 APK：[`app/releases/TravelPlanner-v1.4-debug.apk`](app/releases/TravelPlanner-v1.4-debug.apk)
