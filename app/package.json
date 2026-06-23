@@ -1,7 +1,7 @@
 {
   "name": "travel-planner-app",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "旅途旅行计划器，多端本地数据版。",
   "author": "berlin6699",
   "type": "module",
@@ -19,13 +19,15 @@
     "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "desktop:pack": "npm run build && electron-builder --dir",
     "desktop:mac": "npm run desktop:mac:arm64",
-    "desktop:mac:arm64": "npm run build && electron-builder --mac dmg zip --arm64",
-    "desktop:mac:x64": "npm run build && electron-builder --mac dmg zip --x64",
-    "desktop:win": "npm run build && electron-builder --win nsis zip --x64",
+    "desktop:mac:arm64": "npm run build && electron-builder --mac dmg --arm64",
+    "desktop:mac:x64": "npm run build && electron-builder --mac dmg --x64",
+    "desktop:win": "npm run build && electron-builder --win nsis --x64",
     "desktop:dist": "npm run desktop:mac && npm run desktop:win"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",
     "@capacitor/file-viewer": "^2.0.1",
     "@capacitor/filesystem": "^8.1.2",
@@ -33,18 +35,6 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
-    "@vitejs/plugin-react": "latest",
-    "idb": "^8.0.3",
-    "jszip": "^3.10.1",
-    "leaflet": "^1.9.4",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "react-leaflet": "^5.0.0",
-    "react-router-dom": "latest"
-  },
-  "devDependencies": {
-    "@capacitor/cli": "^8.4.1",
     "@emnapi/core": "^1.11.1",
     "@emnapi/runtime": "^1.11.1",
     "@testing-library/jest-dom": "latest",
@@ -52,14 +42,23 @@
     "@types/leaflet": "^1.9.21",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
     "autoprefixer": "latest",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "electron": "^42.4.1",
     "electron-builder": "^26.15.3",
     "fake-indexeddb": "^6.2.5",
+    "idb": "^8.0.3",
     "jsdom": "latest",
+    "jszip": "^3.10.1",
+    "leaflet": "^1.9.4",
+    "lucide-react": "latest",
     "postcss": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "latest",
     "tailwindcss": "3.4.17",
     "typescript": "latest",
     "vite": "latest",
@@ -70,13 +69,24 @@
     "appId": "com.berlin6699.travelplanner",
     "productName": "旅途 Travel Planner",
     "copyright": "Copyright © 2026 berlin6699",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "directories": {
       "output": "desktop-dist"
     },
     "files": [
       "dist/**/*",
       "desktop/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/**/*",
+      "!android/**/*",
+      "!ios/**/*",
+      "!desktop-dist/**/*",
+      "!releases/**/*"
     ],
     "extraMetadata": {
       "main": "desktop/main.cjs"
@@ -84,8 +94,7 @@
     "mac": {
       "category": "public.app-category.travel",
       "target": [
-        "dmg",
-        "zip"
+        "dmg"
       ],
       "icon": "assets/desktop-icon.icns"
     },
@@ -93,12 +102,6 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
           "arch": [
             "x64"
           ]
