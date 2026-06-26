@@ -36,4 +36,15 @@ describe('手机本地数据层',()=>{
     expect(updated?.reservation_ids).toEqual([second.id])
     expect(updated?.reservation_id).toBe(second.id)
   })
+
+  it('日程可关联具体灵感帖子，删除帖子后会移除失效关联',async()=>{
+    const [trip]=await api.trips.list()
+    const inspiration=await api.inspirations.create({trip_id:trip.id,title:'东京车站便当攻略',platform:'小红书',url:'https://example.com/tokyo',tags:['美食'],related_place:'东京站',note:null,image_url:null,favorite:true})
+    const item=(await api.itinerary.list({trip_id:trip.id})).find(value=>value.title==='转场日')!
+    const {id:_,...payload}=item
+    await api.itinerary.update(item.id,{...payload,inspiration_id:inspiration.id})
+    expect((await api.itinerary.list({trip_id:trip.id})).find(value=>value.id===item.id)?.inspiration_id).toBe(inspiration.id)
+    await api.inspirations.remove(inspiration.id)
+    expect((await api.itinerary.list({trip_id:trip.id})).find(value=>value.id===item.id)?.inspiration_id).toBeNull()
+  })
 })

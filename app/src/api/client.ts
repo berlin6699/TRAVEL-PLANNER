@@ -30,7 +30,7 @@ function normalizeItinerary(item:ItineraryItem):ItineraryItem{
   const ids=[...(Array.isArray(item.reservation_ids)?item.reservation_ids:[]),item.reservation_id]
     .filter((id):id is number=>typeof id==='number'&&Number.isInteger(id)&&id>0)
     .filter((id,index,all)=>all.indexOf(id)===index)
-  return {...item,reservation_ids:ids,reservation_id:ids[0]??null}
+  return {...item,reservation_ids:ids,reservation_id:ids[0]??null,inspiration_id:item.inspiration_id??null}
 }
 
 async function ensureInitialized(){
@@ -90,6 +90,12 @@ async function removeEntity(store:EntityStore,id:number){
       const reservation_ids=normalizeItinerary(item).reservation_ids?.filter(reservationId=>reservationId!==id)||[]
       if(reservation_ids.length!==(normalizeItinerary(item).reservation_ids?.length||0))await tx.objectStore('itinerary').put({...item,reservation_ids,reservation_id:reservation_ids[0]??null})
     }
+    await tx.done;return
+  }
+  if(store==='inspirations'){
+    const itinerary=await db.getAll('itinerary') as ItineraryItem[]
+    const tx=db.transaction(['inspirations','itinerary'],'readwrite');await tx.objectStore('inspirations').delete(id)
+    for(const item of itinerary)if(normalizeItinerary(item).inspiration_id===id)await tx.objectStore('itinerary').put({...item,inspiration_id:null})
     await tx.done;return
   }
   await db.delete(store,id)
