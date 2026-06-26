@@ -1,7 +1,7 @@
 {
   "name": "travel-planner-app",
   "private": true,
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "旅途旅行计划器，多端本地数据版。",
   "author": "berlin6699",
   "type": "module",
