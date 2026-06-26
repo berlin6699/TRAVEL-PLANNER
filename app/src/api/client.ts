@@ -25,6 +25,14 @@ export class ApiError extends Error {
 function today(){return new Date().toISOString().slice(0,10)}
 function plusDays(days:number){const date=new Date();date.setDate(date.getDate()+days);return date.toISOString().slice(0,10)}
 
+/** Keeps records created before multi-reservation support usable without a database reset. */
+function normalizeItinerary(item:ItineraryItem):ItineraryItem{
+  const ids=[...(Array.isArray(item.reservation_ids)?item.reservation_ids:[]),item.reservation_id]
+    .filter((id):id is number=>typeof id==='number'&&Number.isInteger(id)&&id>0)
+    .filter((id,index,all)=>all.indexOf(id)===index)
+  return {...item,reservation_ids:ids,reservation_id:ids[0]??null}
+}
+
 async function ensureInitialized(){
   const db=await dbPromise
   if(await db.count('trips'))return
@@ -42,15 +50,19 @@ function compare(store:EntityStore,a:any,b:any){
 async function listEntities<T extends Entity>(store:EntityStore,params?:Record<string,string|number|boolean|null|undefined>):Promise<T[]>{
   await ensureInitialized();const db=await dbPromise
   const rows=await db.getAll(store) as T[]
-  return rows.filter(row=>Object.entries(params||{}).every(([key,value])=>value===null||value===undefined||value===''||(row as any)[key]===value)).sort((a,b)=>compare(store,a,b))
+  const matched=rows.filter(row=>Object.entries(params||{}).every(([key,value])=>value===null||value===undefined||value===''||(row as any)[key]===value))
+  const normalized=store==='itinerary'?(matched as unknown as ItineraryItem[]).map(normalizeItinerary):matched
+  return normalized.sort((a,b)=>compare(store,a,b)) as T[]
 }
 
 async function createEntity<T extends Entity>(store:EntityStore,data:NewItem<T>):Promise<T>{
-  const db=await dbPromise;const id=Number(await db.add(store,data as any));return {...data,id} as T
+  const value=store==='itinerary'?normalizeItinerary(data as unknown as ItineraryItem):data
+  const db=await dbPromise;const id=Number(await db.add(store,value as any));return {...value,id} as T
 }
 
 async function updateEntity<T extends Entity>(store:EntityStore,id:number,data:NewItem<T>):Promise<T>{
-  const db=await dbPromise;const value={...data,id} as T;await db.put(store,value);return value
+  const value=store==='itinerary'?normalizeItinerary({...data,id} as unknown as ItineraryItem):{...data,id} as T
+  const db=await dbPromise;await db.put(store,value);return value as T
 }
 
 async function deleteTrip(id:number){
@@ -71,9 +83,13 @@ async function removeEntity(store:EntityStore,id:number){
   const db=await dbPromise
   if(store==='trips')return deleteTrip(id)
   if(store==='reservations'){
-    const files=await db.getAll('attachments') as AttachmentRecord[]
-    const tx=db.transaction(['reservations','attachments'],'readwrite');await tx.objectStore('reservations').delete(id)
+    const [files,itinerary]=await Promise.all([db.getAll('attachments') as Promise<AttachmentRecord[]>,db.getAll('itinerary') as Promise<ItineraryItem[]>])
+    const tx=db.transaction(['reservations','attachments','itinerary'],'readwrite');await tx.objectStore('reservations').delete(id)
     for(const file of files)if(file.reservation_id===id)await tx.objectStore('attachments').delete(file.id)
+    for(const item of itinerary){
+      const reservation_ids=normalizeItinerary(item).reservation_ids?.filter(reservationId=>reservationId!==id)||[]
+      if(reservation_ids.length!==(normalizeItinerary(item).reservation_ids?.length||0))await tx.objectStore('itinerary').put({...item,reservation_ids,reservation_id:reservation_ids[0]??null})
+    }
     await tx.done;return
   }
   await db.delete(store,id)
@@ -162,7 +178,7 @@ function validatePayload(payload:ExportPayload){
 async function importPayload(payload:ExportPayload){
   validatePayload(payload);await clearDatabase();const db=await dbPromise
   const collections:[EntityStore,any[]][]=[['trips',payload.trips?.length?payload.trips:[payload.trip]],['destinations',payload.destinations||[]],['cities',payload.cities||[]],['itinerary',payload.itinerary||[]],['reservations',payload.reservations||[]],['inspirations',payload.inspirations||[]],['places',payload.places||[]],['routeLegs',payload.route_legs||[]],['expenses',payload.expenses||[]],['checklist',payload.checklist||[]]]
-  const tx=db.transaction(ENTITY_STORES,'readwrite');for(const [store,rows] of collections)for(const row of rows)await tx.objectStore(store).put(row);await tx.done;await ensureInitialized();return {message:'导入成功'}
+  const tx=db.transaction(ENTITY_STORES,'readwrite');for(const [store,rows] of collections)for(const row of rows)await tx.objectStore(store).put(store==='itinerary'?normalizeItinerary(row as ItineraryItem):row);await tx.done;await ensureInitialized();return {message:'导入成功'}
 }
 
 async function importArchive(file:File){

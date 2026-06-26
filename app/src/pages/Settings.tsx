@@ -5,24 +5,10 @@ import { Share } from '@capacitor/share'
 import { Copy, DatabaseBackup, Download, FolderOpen, HardDrive, Info, RotateCcw, Save, Upload } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { currencies } from '../data/currencies'
 import { ErrorBanner, FormInput, FormSelect, Loading, PageHeader } from '../components/UI'
 import { useTrip } from '../contexts/TripContext'
 import type { ExportPayload, Trip } from '../types'
-
-const currencies = [
-  ['CNY', '人民币'],
-  ['USD', '美元'],
-  ['EUR', '欧元'],
-  ['GBP', '英镑'],
-  ['JPY', '日元'],
-  ['HKD', '港币'],
-  ['KRW', '韩元'],
-  ['THB', '泰铢'],
-  ['SGD', '新加坡元'],
-  ['AUD', '澳元'],
-  ['CAD', '加元'],
-  ['CHF', '瑞士法郎'],
-]
 
 function platformName(value: string) {
   if (value === 'darwin') return 'macOS'
@@ -37,6 +23,7 @@ export default function Settings() {
   const loading = false
   const error = ''
   const [form, setForm] = useState<Omit<Trip, 'id'> | null>(null)
+  const [budgetInput, setBudgetInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [actionError, setActionError] = useState('')
@@ -52,6 +39,7 @@ export default function Settings() {
         total_budget: Number(data.total_budget),
         currency: data.currency,
       })
+      setBudgetInput(String(data.total_budget))
     }
   }, [data])
 
@@ -196,7 +184,7 @@ export default function Settings() {
               </div>
               <FormInput required type="date" label="开始日期" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
               <FormInput required type="date" label="结束日期" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} />
-              <FormInput required type="number" min="0" step="0.01" label="总预算" value={form.total_budget} onChange={e => setForm({ ...form, total_budget: Number(e.target.value) })} />
+              <FormInput required type="number" min="0" step="0.01" label="总预算" value={budgetInput} onChange={e => { setBudgetInput(e.target.value); setForm({ ...form, total_budget: e.target.value === '' ? 0 : Number(e.target.value) }) }} />
               <FormSelect label="预算货币" value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })}>
                 {currencies.map(([value, label]) => <option key={value} value={value}>{label} · {value}</option>)}
               </FormSelect>

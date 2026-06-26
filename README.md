@@ -36,7 +36,7 @@ npm run desktop:mac
 npm run desktop:win
 ```
 
-最新版安装包集中放在 GitHub Release：[`app-v1.5.2`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.2)，包含 Android APK、macOS DMG 和 Windows 10 x64 EXE。
+最新版安装包集中放在 GitHub Release：[`app-v1.5.3`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.3)，包含 Android APK、macOS DMG 和 Windows 10 x64 EXE。
 
 更多说明见 [`app/README.md`](app/README.md)。
 

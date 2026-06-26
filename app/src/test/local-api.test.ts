@@ -24,4 +24,16 @@ describe('手机本地数据层',()=>{
     expect((await api.cities.list())[0].name).toBe('东京')
     expect((await api.itinerary.list())[0].title).toBe('抵达东京')
   })
+
+  it('日程可关联多个预约，删除预约后会移除失效关联',async()=>{
+    const [trip]=await api.trips.list()
+    const reservation=(name:string)=>api.reservations.create({trip_id:trip.id,name,type:'车票',date:trip.start_date,time:null,status:'已预约',order_number:null,location:null,note:null,booking_url:null,map_url:null,image_url:null,city_id:null})
+    const [first,second]=await Promise.all([reservation('东京到京都'),reservation('京都酒店')])
+    const item=await api.itinerary.create({trip_id:trip.id,title:'转场日',date:trip.start_date,start_time:'12:00',end_time:null,type:'交通',location:null,note:null,reservation_id:first.id,reservation_ids:[first.id,second.id],place_id:null,map_url:null,image_url:null,city_id:null})
+    expect((await api.itinerary.list({trip_id:trip.id})).find(value=>value.id===item.id)?.reservation_ids).toEqual([first.id,second.id])
+    await api.reservations.remove(first.id)
+    const updated=(await api.itinerary.list({trip_id:trip.id})).find(value=>value.id===item.id)
+    expect(updated?.reservation_ids).toEqual([second.id])
+    expect(updated?.reservation_id).toBe(second.id)
+  })
 })

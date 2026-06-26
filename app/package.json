@@ -1,7 +1,7 @@
 {
   "name": "travel-planner-app",
   "private": true,
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "旅途旅行计划器，多端本地数据版。",
   "author": "berlin6699",
   "type": "module",
@@ -24,7 +24,9 @@
     "desktop:win": "npm run build && electron-builder --win nsis --x64",
     "desktop:dist": "npm run desktop:mac && npm run desktop:win"
   },
-  "dependencies": {},
+  "dependencies": {
+    "docx": "^9.7.1"
+  },
   "devDependencies": {
     "@capacitor/android": "^8.4.1",
     "@capacitor/cli": "^8.4.1",

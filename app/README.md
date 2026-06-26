@@ -46,7 +46,7 @@ npm run android:apk
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`。
 
-最新版 Android APK、macOS 和 Windows 安装包集中放在 GitHub Release：[`app-v1.5.2`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.2)。
+最新版 Android APK、macOS 和 Windows 安装包集中放在 GitHub Release：[`app-v1.5.3`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.3)。
 
 ## iPhone
 
