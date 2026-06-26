@@ -22,7 +22,8 @@
     "desktop:mac:arm64": "npm run build && electron-builder --mac dmg --arm64",
     "desktop:mac:x64": "npm run build && electron-builder --mac dmg --x64",
     "desktop:win": "npm run build && electron-builder --win nsis --x64",
-    "desktop:dist": "npm run desktop:mac && npm run desktop:win"
+    "desktop:dist": "npm run desktop:mac && npm run desktop:win",
+    "desktop:organize-artifacts": "node scripts/organize-desktop-artifacts.cjs"
   },
   "dependencies": {
     "docx": "^9.7.1"

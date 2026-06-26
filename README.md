@@ -18,6 +18,7 @@ TRAVEL-PLANNER/
 │  ├─ backend/            FastAPI + SQLite
 │  ├─ compose.yaml        Docker Compose 配置
 │  └─ README.md           网页端部署与开发说明
+├─ docs/                  安装包、发布和避坑说明
 └─ README.md
 ```
 
@@ -39,6 +40,8 @@ npm run desktop:win
 最新版安装包集中放在 GitHub Release：[`app-v1.5.4`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.4)，包含 Android APK、macOS DMG 和 Windows 10 x64 EXE。
 
 更多说明见 [`app/README.md`](app/README.md)。
+
+安装包区别、macOS “文件已损坏”提示、本地构建产物整理规则见 [`docs/release-artifacts-and-macos.md`](docs/release-artifacts-and-macos.md)。
 
 ## 网页端
 

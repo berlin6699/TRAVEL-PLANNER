@@ -84,6 +84,14 @@ npm run desktop:win
 
 输出位置：`desktop-dist/`。默认只生成推荐安装包；该目录是本地构建产物，体积较大，不提交到 Git；需要分享安装包时上传到 GitHub Release。
 
+如果 `desktop-dist/` 里历史 DMG、EXE、ZIP 混在一起，可以运行：
+
+```bash
+npm run desktop:organize-artifacts
+```
+
+这个命令会把当前版本安装包移动到 `desktop-dist/latest/`，旧版本安装包移动到 `desktop-dist/archive/`，解包调试目录移动到 `desktop-dist/unpacked/`，不会删除文件。安装包区别和 macOS 安装拦截说明见 [`../docs/release-artifacts-and-macos.md`](../docs/release-artifacts-and-macos.md)。
+
 ## 迁移数据
 
 1. 在电脑端“设置”中选择“导出完整备份 ZIP”。
