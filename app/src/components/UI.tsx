@@ -1,6 +1,6 @@
 import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowUpRight, BedDouble, CircleHelp, ExternalLink, Inbox, Landmark, LoaderCircle, MapPin, Plane, Plus, Sparkles, TrainFront, UtensilsCrossed, X } from 'lucide-react'
+import { ArrowUpRight, BedDouble, Check, CircleHelp, ExternalLink, Inbox, Landmark, LoaderCircle, MapPin, Plane, Plus, Sparkles, TrainFront, UtensilsCrossed, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReservationType } from '../types'
 
@@ -33,6 +33,27 @@ const fieldClass = 'mt-1.5 w-full rounded-xl border border-stone-200/90 bg-stone
 export function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) { return <label className="block text-sm font-medium text-stone-700">{label}<input className={fieldClass} {...props}/></label> }
 export function FormSelect({ label, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label: string; children: ReactNode }) { return <label className="block text-sm font-medium text-stone-700">{label}<select className={fieldClass} {...props}>{children}</select></label> }
 export function FormTextarea({ label, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) { return <label className="block text-sm font-medium text-stone-700">{label}<textarea className={`${fieldClass} min-h-24 resize-y`} {...props}/></label> }
+type FormCheckboxTone = 'coral' | 'mint' | 'sky' | 'stone'
+export function FormCheckbox({ label, description, checked, onChange, tone='coral', className='' }: { label: ReactNode; description?: ReactNode; checked: boolean; onChange: (checked: boolean) => void; tone?: FormCheckboxTone; className?: string }) {
+  const cardStyles: Record<FormCheckboxTone, string> = {
+    coral: checked ? 'border-coral-200 bg-coral-50/90 text-coral-800 shadow-sm shadow-coral-100/50' : 'border-stone-200/80 bg-white/80 text-stone-600 hover:border-coral-200 hover:bg-coral-50/45',
+    mint: checked ? 'border-mint-200 bg-mint-50/90 text-mint-700 shadow-sm shadow-mint-100/50' : 'border-stone-200/80 bg-white/80 text-stone-600 hover:border-mint-200 hover:bg-mint-50/45',
+    sky: checked ? 'border-skysoft-200 bg-skysoft-50/90 text-sky-700 shadow-sm shadow-skysoft-100/50' : 'border-stone-200/80 bg-white/80 text-stone-600 hover:border-skysoft-200 hover:bg-skysoft-50/45',
+    stone: checked ? 'border-stone-300 bg-stone-100 text-stone-800 shadow-sm shadow-stone-100/50' : 'border-stone-200/80 bg-white/80 text-stone-600 hover:border-stone-300 hover:bg-stone-50'
+  }
+  const markStyles: Record<FormCheckboxTone, string> = {
+    coral: 'border-coral-500 bg-coral-500 text-white shadow-sm shadow-coral-200',
+    mint: 'border-mint-500 bg-mint-500 text-white shadow-sm shadow-mint-200',
+    sky: 'border-sky-500 bg-sky-500 text-white shadow-sm shadow-sky-200',
+    stone: 'border-stone-600 bg-stone-700 text-white shadow-sm shadow-stone-200'
+  }
+  const focusStyles: Record<FormCheckboxTone, string> = { coral: 'focus-within:ring-coral-100', mint: 'focus-within:ring-mint-100', sky: 'focus-within:ring-skysoft-100', stone: 'focus-within:ring-stone-100' }
+  return <label className={`group flex cursor-pointer items-start gap-3 rounded-2xl border px-3.5 py-3 text-sm transition duration-300 focus-within:ring-4 ${focusStyles[tone]} ${cardStyles[tone]} ${className}`}>
+    <input type="checkbox" className="sr-only" checked={checked} onChange={event=>onChange(event.target.checked)}/>
+    <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg border transition duration-300 ${checked ? markStyles[tone] : 'border-stone-300 bg-white text-transparent group-hover:border-stone-400'}`}><Check size={13} strokeWidth={3}/></span>
+    <span className="min-w-0 flex-1"><span className="block font-semibold">{label}</span>{description&&<span className="mt-0.5 block text-xs leading-5 text-stone-400">{description}</span>}</span>
+  </label>
+}
 
 export function FormActions({ saving, onCancel }: { saving: boolean; onCancel: () => void }) { return <div className="mt-6 flex justify-end gap-3"><button type="button" className="secondary-btn" onClick={onCancel}>取消</button><button className="primary-btn" disabled={saving}>{saving && <LoaderCircle className="animate-spin" size={17}/>}保存</button></div> }
 export function ErrorBanner({ message }: { message: string }) { return message ? <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</div> : null }

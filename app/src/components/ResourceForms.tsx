@@ -4,10 +4,13 @@ import { api } from '../api/client'
 import { currencies } from '../data/currencies'
 import { fetchExchangeRateToCny } from '../utils/exchangeRates'
 import type { City, Destination, Expense, GeocodeResult, Inspiration, ItineraryItem, NewItem, Place, Reservation, RouteLeg, TransportMode, Trip } from '../types'
-import { ErrorBanner, FormActions, FormInput, FormSelect, FormTextarea } from './UI'
+import { ErrorBanner, FormActions, FormCheckbox, FormInput, FormSelect, FormTextarea } from './UI'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const opts = (values: readonly string[]) => values.map(x => <option key={x}>{x}</option>)
+const PAYMENT_METHODS = ['信用卡','借记卡','支付宝','微信','现金','Apple Pay','PayPal','银行转账','交通卡','其他'] as const
+type PaymentMethod = (typeof PAYMENT_METHODS)[number]
+const paymentMethodOptions = (current?: string | null) => current && !PAYMENT_METHODS.includes(current as PaymentMethod) ? [...PAYMENT_METHODS, current] : [...PAYMENT_METHODS]
 type SaveProps<T extends { id: number }> = { item?: T | null; onSave: (data: NewItem<T>) => Promise<void>; onCancel: () => void }
 const numberOrNull=(value:string)=>value.trim()===''?null:Number(value)
 
@@ -39,7 +42,7 @@ export function ItineraryForm({ item, onSave, onCancel, reservations, inspiratio
     <FormSelect label="关联地点" value={data.place_id??''} onChange={e=>change('place_id',e.target.value?Number(e.target.value):null)}><option value="">不关联</option>{places.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</FormSelect>
     <FormSelect label="关联灵感帖子" value={data.inspiration_id??''} onChange={e=>change('inspiration_id',e.target.value?Number(e.target.value):null)}><option value="">不关联</option>{inspirations.map(inspiration=><option key={inspiration.id} value={inspiration.id}>{inspiration.platform} · {inspiration.title}</option>)}</FormSelect>
     <FormInput type="url" label="地图链接（可选）" placeholder="https://…" value={data.map_url||''} onChange={e=>change('map_url',e.target.value)}/>
-    <fieldset className="sm:col-span-2 rounded-2xl border border-mint-100 bg-mint-50/60 p-4"><legend className="px-1 text-sm font-semibold text-stone-700">关联预约（可多选）</legend><p className="mb-3 text-xs leading-5 text-stone-500">日程不单独保存附件；关联后可从日程直接打开每个预约中的 PDF 文件。</p>{reservations.length?<div className="grid gap-2 sm:grid-cols-2">{reservations.map(reservation=><label key={reservation.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${(data.reservation_ids||[]).includes(reservation.id)?'border-mint-300 bg-white text-stone-800':'border-white bg-white/65 text-stone-500'}`}><input type="checkbox" className="h-4 w-4 accent-mint-500" checked={(data.reservation_ids||[]).includes(reservation.id)} onChange={()=>toggleReservation(reservation.id)}/><span className="min-w-0"><b className="block truncate">{reservation.name}</b><small className="block text-xs text-stone-400">{reservation.type} · {reservation.date}</small></span></label>)}</div>:<p className="text-sm text-stone-400">还没有可关联的预约，先到“预约”页面添加即可。</p>}</fieldset>
+    <fieldset className="sm:col-span-2 rounded-2xl border border-mint-100 bg-mint-50/60 p-4"><legend className="px-1 text-sm font-semibold text-stone-700">关联预约（可多选）</legend><p className="mb-3 text-xs leading-5 text-stone-500">日程不单独保存附件；关联后可从日程直接打开每个预约中的 PDF 文件。</p>{reservations.length?<div className="grid gap-2 sm:grid-cols-2">{reservations.map(reservation=><FormCheckbox key={reservation.id} tone="mint" checked={(data.reservation_ids||[]).includes(reservation.id)} onChange={()=>toggleReservation(reservation.id)} label={reservation.name} description={`${reservation.type} · ${reservation.date}`}/>)}</div>:<p className="text-sm text-stone-400">还没有可关联的预约，先到“预约”页面添加即可。</p>}</fieldset>
     <div className="sm:col-span-2"><FormTextarea label="备注" placeholder="交通、集合点或其他提醒" value={data.note||''} onChange={e=>change('note',e.target.value)}/></div>
   </FormShell>
 }
@@ -65,7 +68,7 @@ export function InspirationForm({ item, onSave, onCancel, tripId }: SaveProps<In
     <FormSelect label="平台" value={data.platform} onChange={e=>change('platform',e.target.value)}>{opts(['小红书','公众号','网页','其他'])}</FormSelect><FormInput label="关联地点" placeholder="例如：祇园" value={data.related_place||''} onChange={e=>change('related_place',e.target.value)}/>
     <div className="sm:col-span-2"><FormInput required type="url" label="攻略链接" placeholder="https://…" value={data.url} onChange={e=>change('url',e.target.value)}/></div>
     <FormInput label="标签" placeholder="美食，拍照，小众" value={tags} onChange={e=>setTags(e.target.value)}/><FormInput type="url" label="封面图片链接" placeholder="https://…" value={data.image_url||''} onChange={e=>change('image_url',e.target.value)}/>
-    <label className="flex items-center gap-3 text-sm font-medium"><input type="checkbox" className="h-4 w-4 accent-coral-500" checked={data.favorite} onChange={e=>change('favorite',e.target.checked)}/>加入收藏</label><div/>
+    <FormCheckbox label="加入收藏" description="收藏后会在首页和灵感库中优先显示。" checked={data.favorite} onChange={checked=>change('favorite',checked)}/><div/>
     <div className="sm:col-span-2"><FormTextarea label="备注" value={data.note||''} onChange={e=>change('note',e.target.value)}/></div>
   </FormShell>
 }
@@ -110,10 +113,10 @@ export function ExpenseForm({ item, onSave, onCancel, itinerary, reservations, t
   return <FormShell onSubmit={e=>{e.preventDefault();void s.submit({...data,currency:'CNY',original_amount:data.original_amount||null,original_currency:data.original_currency||null,exchange_rate:data.exchange_rate||null,payment_method:data.payment_method||null,note:data.note||null})}} saving={s.saving} error={s.error} onCancel={onCancel}>
     <div className="sm:col-span-2"><FormInput required label="消费项目" placeholder="例如：拉面午餐" value={data.title} onChange={e=>change('title',e.target.value)}/></div><FormInput required min="0.01" step="0.01" type="number" label="原币金额" value={originalInput} onChange={e=>onOriginalChange(e.target.value)}/><FormSelect label="原币币种" value={data.original_currency||'CNY'} onChange={e=>void applyCurrency(e.target.value)}>{currencyOptions}</FormSelect>{rateMessage&&<p className="sm:col-span-2 rounded-xl bg-skysoft-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-700">{rateMessage}</p>}<FormInput required min="0.000001" step="0.000001" type="number" label="汇率（1 原币 = CNY）" value={rateInput} onChange={e=>{setRateMessage('已手动修改汇率。');onRateChange(e.target.value)}}/><FormInput required min="0.01" step="0.01" type="number" label="折合人民币" value={convertedInput} onChange={e=>{setConvertedInput(e.target.value);change('amount',numberOrNull(e.target.value)||0)}}/>
     <FormInput required type="date" label="日期" value={data.date} onChange={e=>change('date',e.target.value)}/>
-    <FormSelect label="分类" value={data.category} onChange={e=>change('category',e.target.value)}>{opts(['交通','住宿','餐饮','门票','购物','其他'])}</FormSelect><FormInput label="支付方式" placeholder="微信 / 信用卡 / 现金" value={data.payment_method||''} onChange={e=>change('payment_method',e.target.value)}/>
+    <FormSelect label="分类" value={data.category} onChange={e=>change('category',e.target.value)}>{opts(['交通','住宿','餐饮','门票','购物','其他'])}</FormSelect><FormSelect label="支付方式" value={data.payment_method||''} onChange={e=>change('payment_method',e.target.value||null)}><option value="">未选择</option>{paymentMethodOptions(data.payment_method).map(method=><option key={method} value={method}>{method}</option>)}</FormSelect>
     <FormSelect label="关联日程" value={data.itinerary_id??''} onChange={e=>change('itinerary_id',e.target.value?Number(e.target.value):null)}><option value="">不关联</option>{itinerary.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</FormSelect><FormSelect label="关联预约" value={data.reservation_id??''} onChange={e=>change('reservation_id',e.target.value?Number(e.target.value):null)}><option value="">不关联</option>{reservations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</FormSelect>
     <p className="sm:col-span-2 rounded-xl bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">关联日程用于把消费归到某一项活动；关联预约用于把订票、酒店或门票支出归到对应订单。它们会显示在消费记录与导出文件中，方便回溯，不会改变预算计算。</p>
-    <label className="flex items-center gap-3 text-sm font-medium"><input type="checkbox" className="h-4 w-4 accent-coral-500" checked={data.is_split} onChange={e=>change('is_split',e.target.checked)}/>这笔消费需要 AA</label><div/><div className="sm:col-span-2"><FormTextarea label="备注" value={data.note||''} onChange={e=>change('note',e.target.value)}/></div>
+    <FormCheckbox label="这笔消费需要 AA" description="用于标记多人分摊，不影响金额计算。" checked={data.is_split} onChange={checked=>change('is_split',checked)}/><div/><div className="sm:col-span-2"><FormTextarea label="备注" value={data.note||''} onChange={e=>change('note',e.target.value)}/></div>
   </FormShell>
 }
 
