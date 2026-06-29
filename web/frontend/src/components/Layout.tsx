@@ -8,13 +8,13 @@ import { TripForm } from './ResourceForms'
 import { Modal } from './UI'
 
 const nav = [
-  ['/', '首页', Home], ['/itinerary', '城市日程', CalendarDays], ['/reservations', '预约', NotebookTabs],
+  ['/', '首页', Home], ['/today', '今日模式', Sparkles], ['/itinerary', '城市日程', CalendarDays], ['/reservations', '预约', NotebookTabs],
   ['/inspirations', '灵感', Compass], ['/places', '城市与路线', MapPin], ['/checklist', '行前清单', CheckSquare2],
   ['/expenses', '记账', ReceiptText], ['/settings', '设置', Settings],
 ] as const
 const mobileNav = [
-  ['/', '首页', Home], ['/itinerary', '日程', CalendarDays], ['/reservations', '预约', NotebookTabs],
-  ['/places', '路线', MapPin], ['/settings', '设置', Settings],
+  ['/', '首页', Home], ['/today', '今日', Sparkles], ['/itinerary', '日程', CalendarDays], ['/reservations', '预约', NotebookTabs],
+  ['/settings', '设置', Settings],
 ] as const
 
 export default function Layout() {

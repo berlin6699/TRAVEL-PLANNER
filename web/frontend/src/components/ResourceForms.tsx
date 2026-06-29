@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { MapPin, Search } from 'lucide-react'
 import { api } from '../api/client'
+import { currencies } from '../data/currencies'
+import { fetchExchangeRateToCny } from '../utils/exchangeRates'
 import type { City, Destination, Expense, GeocodeResult, Inspiration, ItineraryItem, NewItem, Place, Reservation, RouteLeg, TransportMode, Trip } from '../types'
 import { ErrorBanner, FormActions, FormInput, FormSelect, FormTextarea } from './UI'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const opts = (values: readonly string[]) => values.map(x => <option key={x}>{x}</option>)
 type SaveProps<T extends { id: number }> = { item?: T | null; onSave: (data: NewItem<T>) => Promise<void>; onCancel: () => void }
+const numberOrNull=(value:string)=>value.trim()===''?null:Number(value)
 
 function FormShell({ children, onSubmit, saving, error, onCancel }: { children: React.ReactNode; onSubmit: (e: FormEvent) => void; saving: boolean; error: string; onCancel: () => void }) {
   return <form onSubmit={onSubmit}><ErrorBanner message={error}/><div className="grid gap-4 sm:grid-cols-2">{children}</div><FormActions saving={saving} onCancel={onCancel}/></form>
@@ -92,9 +95,18 @@ export function RouteLegForm({ item, onSave, onCancel, places, reservations, tri
 }
 
 export function ExpenseForm({ item, onSave, onCancel, itinerary, reservations, tripCurrency, tripId }: SaveProps<Expense> & { itinerary: ItineraryItem[]; reservations: Reservation[]; tripCurrency: string; tripId:number }) {
-  const [data,setData]=useState<NewItem<Expense>>(item ? { ...item } : {trip_id:tripId,title:'',amount:0,currency:'CNY',original_amount:null,original_currency:'CNY',exchange_rate:1,date:today(),category:'餐饮',payment_method:'',note:'',is_split:false,itinerary_id:null,reservation_id:null}); const s=useSubmit(onSave); const change=(key:keyof typeof data,value:unknown)=>setData(v=>({...v,[key]:value}));const recalculate=(amount:number,rate:number)=>Number((amount*rate).toFixed(2))
+  const [data,setData]=useState<NewItem<Expense>>(item ? { ...item } : {trip_id:tripId,title:'',amount:0,currency:'CNY',original_amount:null,original_currency:'CNY',exchange_rate:1,date:today(),category:'餐饮',payment_method:'',note:'',is_split:false,itinerary_id:null,reservation_id:null})
+  const [originalInput,setOriginalInput]=useState(item?String(item.original_amount??item.amount):'')
+  const [rateInput,setRateInput]=useState(item?String(item.exchange_rate??1):'1')
+  const [convertedInput,setConvertedInput]=useState(item?String(item.amount):'')
+  const [rateMessage,setRateMessage]=useState('')
+  const s=useSubmit(onSave); const change=(key:keyof typeof data,value:unknown)=>setData(v=>({...v,[key]:value}));const recalculate=(amount:number,rate:number)=>Number((amount*rate).toFixed(2))
+  const setCalculatedAmount=(original:string,rate:string)=>{const amount=numberOrNull(original),exchangeRate=numberOrNull(rate);if(amount===null||exchangeRate===null)return;const converted=recalculate(amount,exchangeRate);setConvertedInput(String(converted));setData(value=>({...value,amount:converted}))}
+  const onOriginalChange=(value:string)=>{setOriginalInput(value);setData(current=>({...current,original_amount:numberOrNull(value)}));setCalculatedAmount(value,rateInput)}
+  const onRateChange=(value:string)=>{setRateInput(value);setData(current=>({...current,exchange_rate:numberOrNull(value)}));setCalculatedAmount(originalInput,value)}
+  const applyCurrency=async(currency:string)=>{setData(value=>({...value,original_currency:currency}));if(currency==='CNY'){setRateMessage('人民币无需换算，汇率已设为 1。');onRateChange('1');return}setRateMessage('正在自动获取最新汇率…');try{const result=await fetchExchangeRateToCny(currency);onRateChange(String(result.rate));setRateMessage(result.source==='live'?`已自动填充 ${result.date||'最新'} 汇率：1 ${currency} = ${result.rate} CNY`:`网络不可用或接口暂不支持，已使用本地兜底汇率：1 ${currency} ≈ ${result.rate} CNY`)}catch(error){setRateMessage(error instanceof Error?error.message:'暂时无法获取汇率，可手动填写。')}}
   return <FormShell onSubmit={e=>{e.preventDefault();void s.submit({...data,currency:'CNY',original_amount:data.original_amount||null,original_currency:data.original_currency||null,exchange_rate:data.exchange_rate||null,payment_method:data.payment_method||null,note:data.note||null})}} saving={s.saving} error={s.error} onCancel={onCancel}>
-    <div className="sm:col-span-2"><FormInput required label="消费项目" placeholder="例如：拉面午餐" value={data.title} onChange={e=>change('title',e.target.value)}/></div><FormInput required min="0.01" step="0.01" type="number" label="原币金额" value={(data.original_amount??data.amount)||''} onChange={e=>{const amount=Number(e.target.value);setData(v=>({...v,original_amount:amount,amount:recalculate(amount,Number(v.exchange_rate||1))}))}}/><FormSelect label="原币币种" value={data.original_currency||'CNY'} onChange={e=>setData(v=>({...v,original_currency:e.target.value,exchange_rate:e.target.value==='CNY'?1:v.exchange_rate,amount:e.target.value==='CNY'?Number(v.original_amount||v.amount):v.amount}))}>{currencyOptions}</FormSelect><FormInput required min="0.000001" step="0.000001" type="number" label="汇率（1 原币 = CNY）" value={data.exchange_rate||1} onChange={e=>{const rate=Number(e.target.value);setData(v=>({...v,exchange_rate:rate,amount:recalculate(Number(v.original_amount||v.amount),rate)}))}}/><FormInput required min="0.01" step="0.01" type="number" label="折合人民币" value={data.amount||''} onChange={e=>change('amount',Number(e.target.value))}/>
+    <div className="sm:col-span-2"><FormInput required label="消费项目" placeholder="例如：拉面午餐" value={data.title} onChange={e=>change('title',e.target.value)}/></div><FormInput required min="0.01" step="0.01" type="number" label="原币金额" value={originalInput} onChange={e=>onOriginalChange(e.target.value)}/><FormSelect label="原币币种" value={data.original_currency||'CNY'} onChange={e=>void applyCurrency(e.target.value)}>{currencyOptions}</FormSelect>{rateMessage&&<p className="sm:col-span-2 rounded-xl bg-skysoft-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-700">{rateMessage}</p>}<FormInput required min="0.000001" step="0.000001" type="number" label="汇率（1 原币 = CNY）" value={rateInput} onChange={e=>{setRateMessage('已手动修改汇率。');onRateChange(e.target.value)}}/><FormInput required min="0.01" step="0.01" type="number" label="折合人民币" value={convertedInput} onChange={e=>{setConvertedInput(e.target.value);change('amount',numberOrNull(e.target.value)||0)}}/>
     <FormInput required type="date" label="日期" value={data.date} onChange={e=>change('date',e.target.value)}/>
     <FormSelect label="分类" value={data.category} onChange={e=>change('category',e.target.value)}>{opts(['交通','住宿','餐饮','门票','购物','其他'])}</FormSelect><FormInput label="支付方式" placeholder="微信 / 信用卡 / 现金" value={data.payment_method||''} onChange={e=>change('payment_method',e.target.value)}/>
     <FormSelect label="关联日程" value={data.itinerary_id??''} onChange={e=>change('itinerary_id',e.target.value?Number(e.target.value):null)}><option value="">不关联</option>{itinerary.map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</FormSelect><FormSelect label="关联预约" value={data.reservation_id??''} onChange={e=>change('reservation_id',e.target.value?Number(e.target.value):null)}><option value="">不关联</option>{reservations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</FormSelect>
@@ -117,8 +129,4 @@ export function DestinationForm({ item, onSave, onCancel, tripId, destinations }
   </FormShell>
 }
 
-export const currencyOptions = <>{[
-  ['CNY','人民币 CNY'],['USD','美元 USD'],['EUR','欧元 EUR'],['GBP','英镑 GBP'],['JPY','日元 JPY'],
-  ['HKD','港币 HKD'],['KRW','韩元 KRW'],['THB','泰铢 THB'],['SGD','新加坡元 SGD'],['AUD','澳元 AUD'],
-  ['CAD','加元 CAD'],['CHF','瑞士法郎 CHF'],
-].map(([value,label])=><option key={value} value={value}>{label}</option>)}</>
+export const currencyOptions = <>{currencies.map(([value,label])=><option key={value} value={value}>{label} {value}</option>)}</>
