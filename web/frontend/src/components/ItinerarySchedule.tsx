@@ -1,0 +1,94 @@
+import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, Clock, Edit3, FileText, History, MapPin, NotebookTabs, Trash2 } from 'lucide-react'
+import { MapButton, type MapTarget } from './MapPreview'
+import { Badge, IconButton } from './UI'
+import { countItineraryItems, groupItineraryByDay, splitItineraryDaysByToday, type ItineraryDayGroup } from '../lib/itinerary'
+import type { City, ItineraryItem, Reservation } from '../types'
+import { formatDate, todayDateKey } from '../utils'
+
+export interface ItineraryScheduleProps {
+  items: ItineraryItem[]
+  cityById: Map<number, City>
+  reservationById: Map<number, Reservation>
+  attachmentCountByReservation: Map<number, number>
+  hideCity?: boolean
+  onEdit: (item: ItineraryItem) => void
+  onDelete: (item: ItineraryItem) => Promise<void>
+  onMap: (target: MapTarget) => void
+  onReservation: (id: number) => void
+}
+
+export function ItinerarySchedule({ items, cityById, reservationById, attachmentCountByReservation, hideCity = false, onEdit, onDelete, onMap, onReservation }: ItineraryScheduleProps) {
+  const today = todayDateKey()
+  const [showPast, setShowPast] = useState(false)
+  const dayGroups = useMemo(() => groupItineraryByDay(items), [items])
+  const { pastDays, currentDays } = useMemo(() => splitItineraryDaysByToday(dayGroups, today), [dayGroups, today])
+  const pastCount = countItineraryItems(pastDays)
+
+  return <div className="space-y-7">
+    {pastCount > 0 && <PastDaysDisclosure days={pastDays} count={pastCount} open={showPast} onToggle={() => setShowPast(value => !value)}>
+      {pastDays.map(day => <ScheduleDay key={day.date} day={day} today={today} isPast cityById={cityById} reservationById={reservationById} attachmentCountByReservation={attachmentCountByReservation} hideCity={hideCity} onEdit={onEdit} onDelete={onDelete} onMap={onMap} onReservation={onReservation}/>)}
+    </PastDaysDisclosure>}
+    {currentDays.map(day => <ScheduleDay key={day.date} day={day} today={today} cityById={cityById} reservationById={reservationById} attachmentCountByReservation={attachmentCountByReservation} hideCity={hideCity} onEdit={onEdit} onDelete={onDelete} onMap={onMap} onReservation={onReservation}/>)}
+    {!currentDays.length && pastCount > 0 && <div className="rounded-3xl border border-dashed border-coral-200 bg-coral-50/50 p-6 text-center text-sm leading-6 text-stone-500">今天和之后暂时没有日程，过去的安排已经收纳在上方。</div>}
+  </div>
+}
+
+function PastDaysDisclosure({ days, count, open, onToggle, children }: { days: ItineraryDayGroup[]; count: number; open: boolean; onToggle: () => void; children: ReactNode }) {
+  return <section className="rounded-[1.75rem] border border-stone-200/80 bg-white/80 p-3 shadow-sm shadow-stone-200/40 backdrop-blur">
+    <button type="button" className="flex w-full items-center gap-3 rounded-[1.35rem] px-3 py-3 text-left transition hover:bg-stone-50" onClick={onToggle} aria-expanded={open}>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-stone-100 text-stone-500"><History size={18}/></span>
+      <span className="min-w-0 flex-1"><span className="block font-bold text-stone-800">过去日程已折叠</span><span className="block text-xs leading-5 text-stone-400">{days.length} 天 · {count} 项安排，需要回看时再展开</span></span>
+      <ChevronDown className={`shrink-0 text-stone-400 transition ${open ? 'rotate-180' : ''}`} size={20}/>
+    </button>
+    {open && <div className="mt-4 space-y-7 border-t border-stone-100 px-1 pt-5 sm:px-3">{children}</div>}
+  </section>
+}
+
+function ScheduleDay(props: Omit<ItineraryScheduleProps, 'items'> & { day: ItineraryDayGroup; today: string; isPast?: boolean }) {
+  const { day, today, isPast = false } = props
+  const isToday = day.date === today
+
+  return <div>
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-bold">{formatDate(day.date, { month: 'long', day: 'numeric', weekday: 'long' })}</h3>
+          {isToday && <Badge tone="coral">今天</Badge>}
+          {isPast && <Badge tone="stone">已过去</Badge>}
+        </div>
+        <p className="mt-1 text-xs text-stone-400">{day.items.length} 项安排</p>
+      </div>
+    </div>
+    <div className={`space-y-3 border-l-2 pl-5 sm:pl-8 ${isPast ? 'border-stone-200' : 'border-coral-100'}`}>
+      {day.items.map(item => <ScheduleCard key={item.id} item={item} {...props}/>)}
+    </div>
+  </div>
+}
+
+function ScheduleCard({ item, isPast = false, cityById, reservationById, attachmentCountByReservation, hideCity, onEdit, onDelete, onMap, onReservation }: Omit<ItineraryScheduleProps, 'items'> & { item: ItineraryItem; day: ItineraryDayGroup; today: string; isPast?: boolean }) {
+  const reservation = item.reservation_id ? reservationById.get(item.reservation_id) : undefined
+  const attachmentCount = item.reservation_id ? attachmentCountByReservation.get(item.reservation_id) || 0 : 0
+  const isTicket = reservation && ['车票', '机票'].includes(reservation.type)
+
+  return <article className={`card relative p-5 ${isPast ? 'bg-white/80 opacity-90' : ''}`}>
+    <span className={`absolute -left-[27px] top-7 h-3 w-3 rounded-full ring-4 sm:-left-[39px] ${isPast ? 'bg-stone-300 ring-white' : 'bg-coral-500 ring-cream'}`}/>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+      <div className={`flex min-w-24 items-center gap-2 font-bold ${isPast ? 'text-stone-400' : 'text-coral-600'}`}><Clock size={16}/>{item.start_time.slice(0, 5)}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="break-words text-lg font-bold">{item.title}</h4>
+          <Badge tone={item.type === '景点' ? 'mint' : 'sky'}>{item.type}</Badge>
+          {!hideCity && item.city_id && <Badge tone="stone">{cityById.get(item.city_id)?.name}</Badge>}
+        </div>
+        {item.location && <p className="mt-2 flex items-start gap-1.5 break-words text-sm text-stone-500"><MapPin className="mt-0.5 shrink-0" size={15}/>{item.location}</p>}
+        {item.note && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-500">{item.note}</p>}
+        <div className="mt-4 flex flex-wrap gap-4">
+          {item.map_url && <MapButton target={{ title: item.title, url: item.map_url, query: item.location }} onOpen={onMap}/>}
+          {item.reservation_id && <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-coral-600" onClick={() => onReservation(item.reservation_id!)}>{isTicket ? <FileText size={15}/> : <NotebookTabs size={15}/>}查看{isTicket ? `${reservation.type}文件` : '预约'}{attachmentCount ? ` (${attachmentCount})` : ''}</button>}
+        </div>
+      </div>
+      <div className="flex shrink-0"><IconButton aria-label="编辑" onClick={() => onEdit(item)}><Edit3 size={17}/></IconButton><IconButton aria-label="删除" onClick={() => void onDelete(item)}><Trash2 size={17}/></IconButton></div>
+    </div>
+  </article>
+}

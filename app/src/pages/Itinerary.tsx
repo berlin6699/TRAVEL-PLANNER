@@ -1,61 +1,178 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Building2, CalendarRange, ChevronDown, Clock, Edit3, FileText, History, MapPin, Search, Sparkles, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Building2, CalendarRange, MapPin, Search } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { DocumentExportActions } from '../components/DocumentExportActions'
-import MapPreview, { MapButton, type MapTarget } from '../components/MapPreview'
+import { ItinerarySchedule, type ItineraryScheduleProps } from '../components/ItinerarySchedule'
+import MapPreview, { type MapTarget } from '../components/MapPreview'
 import { ItineraryForm } from '../components/ResourceForms'
-import { Badge, EmptyState, ErrorBanner, IconButton, Loading, Modal, PageHeader } from '../components/UI'
+import { EmptyState, ErrorBanner, Loading, Modal, PageHeader } from '../components/UI'
 import { useLoad } from '../hooks/useLoad'
 import { useTrip } from '../contexts/TripContext'
-import type { City, Inspiration, ItineraryItem, NewItem, Place, Reservation } from '../types'
-import { formatDate, todayDateKey } from '../utils'
+import { buildAttachmentCounts, buildCitySections, buildItineraryExportTable, itineraryMatches, reservationIdsFor } from '../lib/itinerary'
+import type { City, ItineraryItem, NewItem, Reservation } from '../types'
+import { formatDate } from '../utils'
 
-function reservationIdsFor(item:ItineraryItem){return [...(item.reservation_ids||[]),item.reservation_id].filter((id):id is number=>Boolean(id)).filter((id,index,all)=>all.indexOf(id)===index)}
-function matches(item:ItineraryItem,query:string,place?:Place,reservations:Reservation[]=[],inspiration?:Inspiration){
-  if(!query)return true
-  const haystack=[item.title,item.date,item.type,item.note,item.location,place?.name,place?.address,inspiration?.title,inspiration?.platform,...reservations.map(reservation=>reservation.name)].filter(Boolean).join(' ').toLocaleLowerCase('zh-CN')
-  return haystack.includes(query)
-}
+export default function Itinerary() {
+  const { selectedTrip } = useTrip()
+  const tripId = selectedTrip!.id
+  const { data, loading, error, reload } = useLoad(async () => {
+    const [items, reservations, inspirations, places, cities, attachments] = await Promise.all([
+      api.itinerary.list({ trip_id: tripId }),
+      api.reservations.list({ trip_id: tripId }),
+      api.inspirations.list({ trip_id: tripId }),
+      api.places.list({ trip_id: tripId }),
+      api.cities.list({ trip_id: tripId }),
+      api.reservationAttachments.list(tripId),
+    ])
+    return { items, reservations, inspirations, places, cities, attachments }
+  })
 
-export default function Itinerary(){
-  const {selectedTrip}=useTrip();const tripId=selectedTrip!.id
-  const {data,loading,error,reload}=useLoad(async()=>{const [items,reservations,inspirations,places,cities,attachments]=await Promise.all([api.itinerary.list({trip_id:tripId}),api.reservations.list({trip_id:tripId}),api.inspirations.list({trip_id:tripId}),api.places.list({trip_id:tripId}),api.cities.list({trip_id:tripId}),api.reservationAttachments.list(tripId)]);return {items,reservations,inspirations,places,cities,attachments}})
-  const [params,setParams]=useSearchParams(),navigate=useNavigate()
-  const requestedCityId=Number(params.get('city_id'))||null
-  const [editing,setEditing]=useState<ItineraryItem|null|undefined>(undefined),[mapTarget,setMapTarget]=useState<MapTarget|null>(null),[view,setView]=useState<'time'|'city'>(requestedCityId?'city':'time'),[query,setQuery]=useState('')
-  useEffect(()=>{if(params.get('new')==='1'){setEditing(null);setParams({}, {replace:true})}},[params,setParams])
-  useEffect(()=>{if(requestedCityId)setView('city')},[requestedCityId])
-  const save=async(value:NewItem<ItineraryItem>)=>{editing?await api.itinerary.update(editing.id,value):await api.itinerary.create(value);setEditing(undefined);await reload()}
-  const remove=async(item:ItineraryItem)=>{if(confirm(`确定删除“${item.title}”吗？`)){await api.itinerary.remove(item.id);await reload()}}
-  if(loading)return <Loading/>;if(!data)return <ErrorBanner message={error}/>
-  const cityById=new Map(data.cities.map(city=>[city.id,city])),placeById=new Map(data.places.map(place=>[place.id,place])),reservationById=new Map(data.reservations.map(reservation=>[reservation.id,reservation])),inspirationById=new Map(data.inspirations.map(inspiration=>[inspiration.id,inspiration]))
-  const attachmentCountByReservation=new Map<number,number>();data.attachments.forEach(file=>attachmentCountByReservation.set(file.reservation_id,(attachmentCountByReservation.get(file.reservation_id)||0)+1))
-  const normalizedQuery=query.trim().toLocaleLowerCase('zh-CN')
-  const matchedItems=data.items.filter(item=>matches(item,normalizedQuery,item.place_id?placeById.get(item.place_id):undefined,reservationIdsFor(item).map(id=>reservationById.get(id)).filter((reservation):reservation is Reservation=>Boolean(reservation)),item.inspiration_id?inspirationById.get(item.inspiration_id):undefined))
-  const activeCity=requestedCityId?cityById.get(requestedCityId):undefined
-  const citySections=(activeCity?[activeCity]:data.cities).map(city=>[city,matchedItems.filter(item=>item.city_id===city.id)] as [City,ItineraryItem[]]);const unassigned=matchedItems.filter(item=>!item.city_id);if(!activeCity&&unassigned.length)citySections.push([null as unknown as City,unassigned])
-  const clearCity=()=>{const next=new URLSearchParams(params);next.delete('city_id');setParams(next,{replace:true})}
-  const showTime=()=>{setView('time');clearCity()}
-  const exportTable={title:`${selectedTrip!.name} · 城市日程`,description:activeCity?`${activeCity.name}的日程清单`:'当前城市日程清单',columns:[{label:'日期 / 时间'},{label:'日程'},{label:'城市 / 类型'},{label:'关联地点'},{label:'关联预约'},{label:'关联灵感'},{label:'备注'}],rows:matchedItems.map(item=>{const place=item.place_id?placeById.get(item.place_id):undefined;const reservations=reservationIdsFor(item).map(id=>reservationById.get(id)?.name).filter(Boolean).join('、');return [`${item.date} ${item.start_time}${item.end_time?`–${item.end_time}`:''}`,item.title,`${item.city_id?cityById.get(item.city_id)?.name||'未指定城市':'跨城市 / 未指定'} · ${item.type}`,place?[place.name,place.address].filter(Boolean).join(' · '):item.location||'—',reservations||'—',item.inspiration_id?inspirationById.get(item.inspiration_id)?.title||'已删除':'—',item.note||'—']})}
-  return <div><PageHeader title="城市日程" description="默认按日期和时间查看整段旅程，也可以切换成按城市归类。" action="新增日程" onAction={()=>setEditing(null)}/><ErrorBanner message={error}/>
-    <div className="control-panel mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="inline-flex self-start rounded-2xl bg-white p-1 shadow-sm"><button onClick={showTime} className={`flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold ${view==='time'?'bg-coral-500 text-white':'text-stone-500'}`}><CalendarRange size={17}/>按时间</button><button onClick={()=>setView('city')} className={`flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold ${view==='city'?'bg-coral-500 text-white':'text-stone-500'}`}><Building2 size={17}/>按城市</button></div><label className="relative block min-w-0 lg:w-80"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16}/><input aria-label="搜索日程" className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-coral-400" value={query} onChange={event=>setQuery(event.target.value)} placeholder="搜索日程、地点或预约"/></label></div>
-    {activeCity&&view==='city'&&<div className="mb-4 inline-flex items-center gap-2 rounded-2xl border border-mint-100 bg-mint-50 px-4 py-2 text-sm text-mint-600"><MapPin size={16}/><span>正在查看 <b>{activeCity.name}</b></span><button onClick={clearCity} className="ml-1 font-semibold text-stone-500 transition hover:text-coral-600">全部城市</button></div>}
+  const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
+  const requestedCityId = Number(params.get('city_id')) || null
+  const [editing, setEditing] = useState<ItineraryItem | null | undefined>(undefined)
+  const [mapTarget, setMapTarget] = useState<MapTarget | null>(null)
+  const [view, setView] = useState<'time' | 'city'>(requestedCityId ? 'city' : 'time')
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (params.get('new') === '1') {
+      setEditing(null)
+      setParams({}, { replace: true })
+    }
+  }, [params, setParams])
+
+  useEffect(() => {
+    if (requestedCityId) setView('city')
+  }, [requestedCityId])
+
+  const save = async (value: NewItem<ItineraryItem>) => {
+    if (editing) await api.itinerary.update(editing.id, value)
+    else await api.itinerary.create(value)
+    setEditing(undefined)
+    await reload()
+  }
+
+  const remove = async (item: ItineraryItem) => {
+    if (confirm(`确定删除“${item.title}”吗？`)) {
+      await api.itinerary.remove(item.id)
+      await reload()
+    }
+  }
+
+  if (loading) return <Loading/>
+  if (!data) return <ErrorBanner message={error}/>
+
+  const cityById = new Map(data.cities.map(city => [city.id, city]))
+  const placeById = new Map(data.places.map(place => [place.id, place]))
+  const reservationById = new Map(data.reservations.map(reservation => [reservation.id, reservation]))
+  const inspirationById = new Map(data.inspirations.map(inspiration => [inspiration.id, inspiration]))
+  const attachmentCountByReservation = buildAttachmentCounts(data.attachments)
+  const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN')
+  const activeCity = requestedCityId ? cityById.get(requestedCityId) : undefined
+  const matchedItems = data.items.filter(item => {
+    const reservations = reservationIdsFor(item)
+      .map(id => reservationById.get(id))
+      .filter((reservation): reservation is Reservation => Boolean(reservation))
+    return itineraryMatches(item, normalizedQuery, {
+      place: item.place_id ? placeById.get(item.place_id) : undefined,
+      reservations,
+      inspiration: item.inspiration_id ? inspirationById.get(item.inspiration_id) : undefined,
+    })
+  })
+  const citySections = buildCitySections(activeCity, data.cities, matchedItems)
+  const exportTable = buildItineraryExportTable({
+    tripName: selectedTrip!.name,
+    activeCity,
+    items: matchedItems,
+    cityById,
+    placeById,
+    reservationById,
+    inspirationById,
+  })
+  const scheduleProps: Omit<ItineraryScheduleProps, 'items' | 'hideCity'> = {
+    cityById,
+    placeById,
+    reservationById,
+    inspirationById,
+    attachmentCountByReservation,
+    onEdit: setEditing,
+    onDelete: remove,
+    onMap: setMapTarget,
+    onReservation: id => navigate(`/reservations?id=${id}&files=1`),
+    onInspiration: id => navigate(`/inspirations?id=${id}`),
+  }
+
+  const clearCity = () => {
+    const next = new URLSearchParams(params)
+    next.delete('city_id')
+    setParams(next, { replace: true })
+  }
+  const showTime = () => {
+    setView('time')
+    clearCity()
+  }
+
+  return <div>
+    <PageHeader title="城市日程" description="默认按日期和时间查看整段旅程，也可以切换成按城市归类。" action="新增日程" onAction={() => setEditing(null)}/>
+    <ErrorBanner message={error}/>
+    <div className="control-panel mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="inline-flex self-start rounded-2xl bg-white p-1 shadow-sm">
+        <button onClick={showTime} className={`flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold ${view === 'time' ? 'bg-coral-500 text-white' : 'text-stone-500'}`}><CalendarRange size={17}/>按时间</button>
+        <button onClick={() => setView('city')} className={`flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold ${view === 'city' ? 'bg-coral-500 text-white' : 'text-stone-500'}`}><Building2 size={17}/>按城市</button>
+      </div>
+      <label className="relative block min-w-0 lg:w-80">
+        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16}/>
+        <input aria-label="搜索日程" className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-coral-400" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索日程、地点或预约"/>
+      </label>
+    </div>
+    {activeCity && view === 'city' && <div className="mb-4 inline-flex items-center gap-2 rounded-2xl border border-mint-100 bg-mint-50 px-4 py-2 text-sm text-mint-600"><MapPin size={16}/><span>正在查看 <b>{activeCity.name}</b></span><button onClick={clearCity} className="ml-1 font-semibold text-stone-500 transition hover:text-coral-600">全部城市</button></div>}
     <DocumentExportActions table={exportTable}/>
-    {!matchedItems.length?<EmptyState title={query?'没有找到匹配日程':'还没有日程'} message={query?'换个关键词，或清空搜索后再试试。':'从抵达、入住或第一项活动开始安排吧。'} action="新增日程" onAction={()=>setEditing(null)}/>:view==='time'?<ScheduleList items={matchedItems} cityById={cityById} placeById={placeById} reservationById={reservationById} inspirationById={inspirationById} attachmentCountByReservation={attachmentCountByReservation} onEdit={setEditing} onDelete={remove} onMap={setMapTarget} onReservation={id=>navigate(`/reservations?id=${id}&files=1`)} onInspiration={id=>navigate(`/inspirations?id=${id}`)}/>:activeCity&&!citySections[0][1].length?<EmptyState title={`${activeCity.name}还没有匹配日程`} message="可以新增一项日程，并把它归到这座城市。" action="新增日程" onAction={()=>setEditing(null)}/>:<div className="space-y-10">{citySections.map(([city,items])=>items.length?<section key={city?.id||'unassigned'}><div className="card mb-5 flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-widest text-coral-600">{city?'CITY':'CROSS CITY'}</p><h2 className="mt-1 text-2xl font-bold">{city?.name||'跨城市 / 未分组'}</h2></div>{city&&<div className="text-sm text-stone-500">{city.arrival_date&&formatDate(city.arrival_date)}{city.departure_date&&` — ${formatDate(city.departure_date)}`}</div>}</div><ScheduleList items={items} cityById={cityById} placeById={placeById} reservationById={reservationById} inspirationById={inspirationById} attachmentCountByReservation={attachmentCountByReservation} hideCity onEdit={setEditing} onDelete={remove} onMap={setMapTarget} onReservation={id=>navigate(`/reservations?id=${id}&files=1`)} onInspiration={id=>navigate(`/inspirations?id=${id}`)}/></section>:null)}</div>}
-    <Modal open={editing!==undefined} title={editing?'编辑日程':'新增日程'} onClose={()=>setEditing(undefined)}><ItineraryForm key={editing?.id||'new'} item={editing} reservations={data.reservations} inspirations={data.inspirations} places={data.places} cities={data.cities} tripId={tripId} onSave={save} onCancel={()=>setEditing(undefined)}/></Modal><MapPreview target={mapTarget} onClose={()=>setMapTarget(null)}/>
+    <ItineraryContent
+      view={view}
+      query={query}
+      items={matchedItems}
+      citySections={citySections}
+      activeCity={activeCity}
+      scheduleProps={scheduleProps}
+      onNew={() => setEditing(null)}
+    />
+    <Modal open={editing !== undefined} title={editing ? '编辑日程' : '新增日程'} onClose={() => setEditing(undefined)}>
+      <ItineraryForm key={editing?.id || 'new'} item={editing} reservations={data.reservations} inspirations={data.inspirations} places={data.places} cities={data.cities} tripId={tripId} onSave={save} onCancel={() => setEditing(undefined)}/>
+    </Modal>
+    <MapPreview target={mapTarget} onClose={() => setMapTarget(null)}/>
   </div>
 }
 
-function ScheduleList({items,cityById,placeById,reservationById,inspirationById,attachmentCountByReservation,hideCity=false,onEdit,onDelete,onMap,onReservation,onInspiration}:{items:ItineraryItem[];cityById:Map<number,City>;placeById:Map<number,Place>;reservationById:Map<number,Reservation>;inspirationById:Map<number,Inspiration>;attachmentCountByReservation:Map<number,number>;hideCity?:boolean;onEdit:(item:ItineraryItem)=>void;onDelete:(item:ItineraryItem)=>Promise<void>;onMap:(target:MapTarget)=>void;onReservation:(id:number)=>void;onInspiration:(id:number)=>void}){
-  const today=todayDateKey()
-  const [showPast,setShowPast]=useState(false)
-  const dayEntries=useMemo(()=>Object.entries(items.reduce<Record<string,ItineraryItem[]>>((result,item)=>{(result[item.date]??=[]).push(item);return result},{})).sort(([a],[b])=>a.localeCompare(b)).map(([date,dayItems])=>[date,[...dayItems].sort((a,b)=>a.start_time.localeCompare(b.start_time))] as [string,ItineraryItem[]]),[items])
-  const pastEntries=dayEntries.filter(([date])=>date<today),currentEntries=dayEntries.filter(([date])=>date>=today),pastCount=pastEntries.reduce((sum,[,dayItems])=>sum+dayItems.length,0)
-  const renderDay=(date:string,dayItems:ItineraryItem[],isPast=false)=>{const isToday=date===today;return <div key={date}><div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{formatDate(date,{month:'long',day:'numeric',weekday:'long'})}</h3>{isToday&&<Badge tone="coral">今天</Badge>}{isPast&&<Badge tone="stone">已过去</Badge>}</div><p className="mt-1 text-xs text-stone-400">{dayItems.length} 项安排</p></div></div><div className={`space-y-3 border-l-2 pl-5 sm:pl-8 ${isPast?'border-stone-200':'border-coral-100'}`}>{dayItems.map(item=>{const place=item.place_id?placeById.get(item.place_id):undefined;const inspiration=item.inspiration_id?inspirationById.get(item.inspiration_id):undefined;const reservations=reservationIdsFor(item).map(id=>reservationById.get(id)).filter((reservation):reservation is Reservation=>Boolean(reservation));const location=place?[place.name,place.address].filter(Boolean).join(' · '):item.location;const mapUrl=item.map_url||place?.map_url;return <article key={item.id} className={`card relative p-5 ${isPast?'bg-white/80 opacity-90':''}`}><span className={`absolute -left-[27px] top-7 h-3 w-3 rounded-full ring-4 sm:-left-[39px] ${isPast?'bg-stone-300 ring-white':'bg-coral-500 ring-cream'}`}/><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><div className={`flex min-w-24 items-center gap-2 font-bold ${isPast?'text-stone-400':'text-coral-600'}`}><Clock size={16}/>{item.start_time.slice(0,5)}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h4 className="break-words text-lg font-bold">{item.title}</h4><Badge tone={item.type==='景点'?'mint':'sky'}>{item.type}</Badge>{!hideCity&&item.city_id&&<Badge tone="stone">{cityById.get(item.city_id)?.name}</Badge>}</div>{location&&<p className="mt-2 flex items-start gap-1.5 break-words text-sm text-stone-500"><MapPin className="mt-0.5 shrink-0" size={15}/>{location}</p>}{item.note&&<p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-500">{item.note}</p>}<div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">{mapUrl&&<MapButton target={{title:item.title,url:mapUrl,query:location}} onOpen={onMap}/>} {inspiration&&<button className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold text-mint-600" onClick={()=>onInspiration(inspiration.id)}><Sparkles size={15}/>查看灵感 · <span className="max-w-48 truncate">{inspiration.title}</span></button>} {reservations.map(reservation=>{const attachmentCount=attachmentCountByReservation.get(reservation.id)||0;return <button key={reservation.id} className="inline-flex items-center gap-1.5 text-sm font-semibold text-coral-600" onClick={()=>onReservation(reservation.id)}><FileText size={15}/>查看 {reservation.name}{attachmentCount?` 的 PDF (${attachmentCount})`:' 预约'}</button>})}</div></div><div className="flex shrink-0"><IconButton aria-label="编辑" onClick={()=>onEdit(item)}><Edit3 size={17}/></IconButton><IconButton aria-label="删除" onClick={()=>void onDelete(item)}><Trash2 size={17}/></IconButton></div></div></article>})}</div></div>}
-  return <div className="space-y-7">
-    {pastCount>0&&<section className="rounded-[1.75rem] border border-stone-200/80 bg-white/80 p-3 shadow-sm shadow-stone-200/40 backdrop-blur"><button type="button" className="flex w-full items-center gap-3 rounded-[1.35rem] px-3 py-3 text-left transition hover:bg-stone-50" onClick={()=>setShowPast(value=>!value)} aria-expanded={showPast}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-stone-100 text-stone-500"><History size={18}/></span><span className="min-w-0 flex-1"><span className="block font-bold text-stone-800">过去日程已折叠</span><span className="block text-xs leading-5 text-stone-400">{pastEntries.length} 天 · {pastCount} 项安排，需要回看时再展开</span></span><ChevronDown className={`shrink-0 text-stone-400 transition ${showPast?'rotate-180':''}`} size={20}/></button>{showPast&&<div className="mt-4 space-y-7 border-t border-stone-100 px-1 pt-5 sm:px-3">{pastEntries.map(([date,dayItems])=>renderDay(date,dayItems,true))}</div>}</section>}
-    {currentEntries.map(([date,dayItems])=>renderDay(date,dayItems))}
-    {!currentEntries.length&&pastCount>0&&<div className="rounded-3xl border border-dashed border-coral-200 bg-coral-50/50 p-6 text-center text-sm leading-6 text-stone-500">今天和之后暂时没有日程，过去的安排已经收纳在上方。</div>}
+function ItineraryContent({
+  view,
+  query,
+  items,
+  citySections,
+  activeCity,
+  scheduleProps,
+  onNew,
+}: {
+  view: 'time' | 'city'
+  query: string
+  items: ItineraryItem[]
+  citySections: [City, ItineraryItem[]][]
+  activeCity?: City
+  scheduleProps: Omit<ItineraryScheduleProps, 'items' | 'hideCity'>
+  onNew: () => void
+}) {
+  if (!items.length) return <EmptyState title={query ? '没有找到匹配日程' : '还没有日程'} message={query ? '换个关键词，或清空搜索后再试试。' : '从抵达、入住或第一项活动开始安排吧。'} action="新增日程" onAction={onNew}/>
+  if (view === 'time') return <ItinerarySchedule items={items} {...scheduleProps}/>
+  if (activeCity && !citySections[0][1].length) return <EmptyState title={`${activeCity.name}还没有匹配日程`} message="可以新增一项日程，并把它归到这座城市。" action="新增日程" onAction={onNew}/>
+
+  return <div className="space-y-10">
+    {citySections.map(([city, sectionItems]) => sectionItems.length ? <section key={city?.id || 'unassigned'}>
+      <div className="card mb-5 flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-xs font-semibold uppercase tracking-widest text-coral-600">{city ? 'CITY' : 'CROSS CITY'}</p><h2 className="mt-1 text-2xl font-bold">{city?.name || '跨城市 / 未分组'}</h2></div>
+        {city && <div className="text-sm text-stone-500">{city.arrival_date && formatDate(city.arrival_date)}{city.departure_date && ` — ${formatDate(city.departure_date)}`}</div>}
+      </div>
+      <ItinerarySchedule items={sectionItems} hideCity {...scheduleProps}/>
+    </section> : null)}
   </div>
 }
