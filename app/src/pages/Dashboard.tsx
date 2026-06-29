@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Badge, EmptyState, ErrorBanner, LinkButton, Loading, ReservationTypeIcon, StatCard } from '../components/UI'
 import { useLoad } from '../hooks/useLoad'
 import { useTrip } from '../contexts/TripContext'
-import { formatDate, formatMoney, tripStatus } from '../utils'
+import { formatDate, formatMoney, todayDateKey, tripStatus } from '../utils'
 
 export default function Dashboard() {
   const {selectedTrip}=useTrip();const trip=selectedTrip!;const tripId=trip.id
@@ -13,7 +13,7 @@ export default function Dashboard() {
   const {destinations,cities,itinerary,reservations,inspirations,expenses}=data
   const baseExpenses=expenses, foreignExpenses=0
   const spent=baseExpenses.reduce((s,x)=>s+Number(x.amount),0), percent=trip.total_budget?Math.min(100,spent/Number(trip.total_budget)*100):0
-  const today=new Date().toISOString().slice(0,10), upcoming=itinerary.find(x=>x.date>=today)
+  const today=todayDateKey(), upcoming=itinerary.find(x=>x.date>=today)
   const todayItems=itinerary.filter(x=>x.date===today), pending=reservations.filter(x=>x.status==='待预约'), booked=reservations.filter(x=>x.status==='已预约')
   const favorite=inspirations.filter(x=>x.favorite).slice(0,3), status=tripStatus(trip.start_date,trip.end_date)
   const quick=[['/itinerary?new=1','新增日程',CalendarCheck],['/reservations?new=1','新增预约',NotebookTabs],['/inspirations?new=1','新增灵感',Lightbulb],['/expenses?new=1','记一笔',ReceiptText]] as const
