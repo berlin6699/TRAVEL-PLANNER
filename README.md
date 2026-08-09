@@ -11,7 +11,7 @@ TRAVEL-PLANNER/
 │  ├─ ios/                Capacitor iOS 原生工程
 │  ├─ desktop/            Electron 桌面端入口
 │  ├─ src/                React + TypeScript 客户端
-│  ├─ releases/           可直接安装的 APK
+│  ├─ releases/           安装包说明（安装包发布在 GitHub Release）
 │  └─ README.md           App 开发与构建说明
 ├─ web/                   网页端
 │  ├─ frontend/           React + Vite + TypeScript
@@ -37,7 +37,7 @@ npm run desktop:mac
 npm run desktop:win
 ```
 
-最新版安装包集中放在 GitHub Release：[`app-v1.5.6`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.6)，包含 Android APK、macOS DMG 和 Windows 10 x64 EXE。
+最新版安装包集中放在 GitHub Release：[`app-v1.5.7`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.7)，包含 Android APK、macOS DMG 和 Windows 10 x64 EXE。
 
 更多说明见 [`app/README.md`](app/README.md)。
 

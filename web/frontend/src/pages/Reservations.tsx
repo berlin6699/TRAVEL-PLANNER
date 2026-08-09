@@ -19,7 +19,11 @@ export default function Reservations(){
   useEffect(()=>{if(params.get('new')==='1'){setEditing(null);setParams({}, {replace:true})}},[params,setParams])
   useEffect(()=>{const requested=params.get('tab');if(requested==='booked'||requested==='pending')setTab(requested)},[params])
   useEffect(()=>{const id=Number(params.get('id'));if(id&&data){const target=data.reservations.find(x=>x.id===id);if(target){setTab(target.status==='待预约'?'pending':'booked');setFilter('全部');setCityFilter(target.city_id??null);setTimeout(()=>document.getElementById(`reservation-${id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),50);if(params.get('files')==='1'){setAttachmentReservation(target);const next=new URLSearchParams(params);next.delete('files');setParams(next,{replace:true})}}}},[params,data,setParams])
-  const items=useMemo(()=>data?.reservations.filter(x=>(tab==='pending'?x.status==='待预约':x.status!=='待预约')&&(filter==='全部'||x.type===filter)&&(!cityFilter||x.city_id===cityFilter))||[],[data,tab,filter,cityFilter])
+  const requestedId=Number(params.get('id'))||null
+  const focusedReservation=data?.reservations.find(x=>x.id===requestedId)
+  const items=useMemo(()=>{const filtered=data?.reservations.filter(x=>(tab==='pending'?x.status==='待预约':x.status!=='待预约')&&(filter==='全部'||x.type===filter)&&(!cityFilter||x.city_id===cityFilter))||[]
+    return focusedReservation&&!filtered.some(x=>x.id===focusedReservation.id)?[focusedReservation,...filtered]:filtered
+  },[data,tab,filter,cityFilter,focusedReservation])
   if(loading)return <Loading/>;if(!data)return <ErrorBanner message={error}/>
   const cityById=new Map(data.cities.map(x=>[x.id,x])),types:('全部'|ReservationType)[]=['全部','酒店','车票','机票','景点','餐厅','其他']
   const save=async(v:NewItem<Reservation>)=>{editing?await api.reservations.update(editing.id,v):await api.reservations.create(v);setEditing(undefined);await reload()}

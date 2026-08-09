@@ -47,12 +47,11 @@ export function FormCheckbox({ label, description, checked, onChange, tone='cora
     sky: 'border-sky-500 bg-sky-500 text-white shadow-sm shadow-sky-200',
     stone: 'border-stone-600 bg-stone-700 text-white shadow-sm shadow-stone-200'
   }
-  const focusStyles: Record<FormCheckboxTone, string> = { coral: 'focus-within:ring-coral-100', mint: 'focus-within:ring-mint-100', sky: 'focus-within:ring-skysoft-100', stone: 'focus-within:ring-stone-100' }
-  return <label className={`group flex cursor-pointer items-start gap-3 rounded-2xl border px-3.5 py-3 text-sm transition duration-300 focus-within:ring-4 ${focusStyles[tone]} ${cardStyles[tone]} ${className}`}>
-    <input type="checkbox" className="sr-only" checked={checked} onChange={event=>onChange(event.target.checked)}/>
+  const focusStyles: Record<FormCheckboxTone, string> = { coral: 'focus-visible:ring-coral-100', mint: 'focus-visible:ring-mint-100', sky: 'focus-visible:ring-skysoft-100', stone: 'focus-visible:ring-stone-100' }
+  return <button type="button" role="checkbox" aria-checked={checked} onClick={()=>onChange(!checked)} className={`group flex w-full cursor-pointer items-start gap-3 rounded-2xl border px-3.5 py-3 text-left text-sm transition duration-300 focus-visible:ring-4 ${focusStyles[tone]} ${cardStyles[tone]} ${className}`}>
     <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg border transition duration-300 ${checked ? markStyles[tone] : 'border-stone-300 bg-white text-transparent group-hover:border-stone-400'}`}><Check size={13} strokeWidth={3}/></span>
     <span className="min-w-0 flex-1"><span className="block font-semibold">{label}</span>{description&&<span className="mt-0.5 block text-xs leading-5 text-stone-400">{description}</span>}</span>
-  </label>
+  </button>
 }
 
 export function FormActions({ saving, onCancel }: { saving: boolean; onCancel: () => void }) { return <div className="mt-6 flex justify-end gap-3"><button type="button" className="secondary-btn" onClick={onCancel}>取消</button><button className="primary-btn" disabled={saving}>{saving && <LoaderCircle className="animate-spin" size={17}/>}保存</button></div> }
