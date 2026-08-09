@@ -53,12 +53,18 @@ export function normalizeExchangeRate(value: number) {
   return Number(value.toFixed(6))
 }
 
-export async function fetchExchangeRateToCny(currency: string): Promise<ExchangeRateResult> {
+function normalizeDate(value?: string) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined
+}
+
+export async function fetchExchangeRateToCny(currency: string, date?: string): Promise<ExchangeRateResult> {
   const code = currency.toUpperCase()
-  if (code === 'CNY') return { rate: 1, source: 'same-currency' }
+  const rateDate = normalizeDate(date)
+  if (code === 'CNY') return { rate: 1, source: 'same-currency', ...(rateDate ? { date: rateDate } : {}) }
 
   try {
-    const response = await fetch(`https://api.frankfurter.dev/v2/rate/${encodeURIComponent(code)}/CNY`, { headers: { Accept: 'application/json' } })
+    const query = rateDate ? `?date=${encodeURIComponent(rateDate)}` : ''
+    const response = await fetch(`https://api.frankfurter.dev/v2/rate/${encodeURIComponent(code)}/CNY${query}`, { headers: { Accept: 'application/json' } })
     if (!response.ok) throw new Error(`Exchange rate request failed: ${response.status}`)
     const body = await response.json() as { rate?: number; date?: string }
     if (typeof body.rate === 'number' && Number.isFinite(body.rate) && body.rate > 0) {
@@ -69,6 +75,6 @@ export async function fetchExchangeRateToCny(currency: string): Promise<Exchange
   }
 
   const fallback = fallbackRatesToCny[code]
-  if (fallback) return { rate: fallback, source: 'fallback' }
+  if (fallback) return { rate: fallback, source: 'fallback', ...(rateDate ? { date: rateDate } : {}) }
   throw new Error(`没有找到 ${code} 到 CNY 的汇率`)
 }
