@@ -48,6 +48,7 @@ jobs:
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_KEY_PASSWORD" && test -n "$ANDROID_STORE_PASSWORD"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+          keytool -list -keystore android/app/release.keystore -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_STORE_PASSWORD" >/dev/null
       - name: Build signed release APK
         env:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

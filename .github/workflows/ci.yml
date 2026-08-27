@@ -71,7 +71,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
-      - run: cd android && ./gradlew assembleDebug
+      - run: cd android && ./gradlew assembleDebug assembleRelease
 
   backend:
     runs-on: ubuntu-latest
