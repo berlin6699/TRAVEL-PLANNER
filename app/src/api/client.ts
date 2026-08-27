@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { FileViewer } from '@capacitor/file-viewer'
 import { openDB } from 'idb'
+import { cancelAllItineraryReminders, cancelItineraryReminder, scheduleItineraryReminder, syncItineraryReminders } from '../services/localNotifications'
 import type { ChecklistItem, City, Destination, Expense, ExportPayload, GeocodeResult, Inspiration, ItineraryItem, NewItem, Place, Reservation, ReservationAttachment, RouteLeg, Trip } from '../types'
 
 type Entity = Trip | Destination | City | ItineraryItem | Reservation | Inspiration | Place | RouteLeg | Expense | ChecklistItem
@@ -27,14 +28,20 @@ export class ApiError extends Error {
 
 function today(){return new Date().toISOString().slice(0,10)}
 function plusDays(days:number){const date=new Date();date.setDate(date.getDate()+days);return date.toISOString().slice(0,10)}
+function normalizeReminderMinutes(value:unknown){return typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<=10080?value:null}
 
 /** Keeps records created before multi-reservation support usable without a database reset. */
 function normalizeItinerary(item:ItineraryItem):ItineraryItem{
   const ids=[...(Array.isArray(item.reservation_ids)?item.reservation_ids:[]),item.reservation_id]
     .filter((id):id is number=>typeof id==='number'&&Number.isInteger(id)&&id>0)
     .filter((id,index,all)=>all.indexOf(id)===index)
-  return {...item,reservation_ids:ids,reservation_id:ids[0]??null,inspiration_id:item.inspiration_id??null}
+  return {...item,reservation_ids:ids,reservation_id:ids[0]??null,inspiration_id:item.inspiration_id??null,reminder_minutes:normalizeReminderMinutes(item.reminder_minutes)}
 }
+
+async function safelySyncReminder(item:ItineraryItem){try{await scheduleItineraryReminder(item)}catch(error){console.warn('无法同步行程提醒',error)}}
+async function safelySyncAllReminders(items:ItineraryItem[]){try{await syncItineraryReminders(items.map(normalizeItinerary))}catch(error){console.warn('无法重建行程提醒',error)}}
+async function safelyCancelReminder(id:number){try{await cancelItineraryReminder(id)}catch(error){console.warn('无法取消行程提醒',error)}}
+async function safelyCancelAllReminders(){try{await cancelAllItineraryReminders()}catch(error){console.warn('无法取消全部行程提醒',error)}}
 
 async function ensureInitialized(){
   const db=await dbPromise
@@ -60,12 +67,16 @@ async function listEntities<T extends Entity>(store:EntityStore,params?:Record<s
 
 async function createEntity<T extends Entity>(store:EntityStore,data:NewItem<T>):Promise<T>{
   const value=store==='itinerary'?normalizeItinerary(data as unknown as ItineraryItem):data
-  const db=await dbPromise;const id=Number(await db.add(store,value as any));return {...value,id} as T
+  const db=await dbPromise;const id=Number(await db.add(store,value as any)),created={...value,id} as T
+  if(store==='itinerary')await safelySyncReminder(created as unknown as ItineraryItem)
+  return created
 }
 
 async function updateEntity<T extends Entity>(store:EntityStore,id:number,data:NewItem<T>):Promise<T>{
   const value=store==='itinerary'?normalizeItinerary({...data,id} as unknown as ItineraryItem):{...data,id} as T
-  const db=await dbPromise;await db.put(store,value);return value as T
+  const db=await dbPromise;await db.put(store,value)
+  if(store==='itinerary')await safelySyncReminder(value as unknown as ItineraryItem)
+  return value as T
 }
 
 async function deleteTrip(id:number){
@@ -80,6 +91,7 @@ async function deleteTrip(id:number){
   const files=await tx.objectStore('attachments').getAll() as AttachmentRecord[]
   for(const file of files)if(reservationIds.has(file.reservation_id))await tx.objectStore('attachments').delete(file.id)
   await tx.done
+  await safelySyncAllReminders(await db.getAll('itinerary') as ItineraryItem[])
 }
 
 async function removeEntity(store:EntityStore,id:number){
@@ -101,6 +113,7 @@ async function removeEntity(store:EntityStore,id:number){
     for(const item of itinerary)if(normalizeItinerary(item).inspiration_id===id)await tx.objectStore('itinerary').put({...item,inspiration_id:null})
     await tx.done;return
   }
+  if(store==='itinerary')await safelyCancelReminder(id)
   await db.delete(store,id)
 }
 
@@ -179,6 +192,7 @@ async function clearDatabase(){
   for(const store of ALL_STORES)await tx.objectStore(store).clear()
   await tx.done
   for(const url of attachmentUrls.values())URL.revokeObjectURL(url);attachmentUrls.clear()
+  await safelyCancelAllReminders()
 }
 
 function validatePayload(payload:ExportPayload){
@@ -190,6 +204,7 @@ function validatePayload(payload:ExportPayload){
   const tripRecords=[...(payload.destinations||[]),...(payload.cities||[]),...payload.itinerary,...reservations,...(payload.inspirations||[]),...(payload.places||[]),...(payload.route_legs||[]),...(payload.expenses||[]),...(payload.checklist||[])] as Array<{trip_id:number}>
   if(tripRecords.some(item=>!tripIds.has(item.trip_id)))throw new ApiError('备份数据包含跨旅程或不存在的关联')
   for(const item of payload.itinerary){
+    if(item.reminder_minutes!=null&&(!Number.isInteger(item.reminder_minutes)||item.reminder_minutes<0||item.reminder_minutes>10080))throw new ApiError(`日程“${item.title}”包含无效提醒时间`)
     const normalized=normalizeItinerary(item)
     if((normalized.reservation_ids||[]).some(id=>!reservationIds.has(id)||reservationTrips.get(id)!==item.trip_id)||(normalized.inspiration_id&&(!inspirationIds.has(normalized.inspiration_id)||inspirationTrips.get(normalized.inspiration_id)!==item.trip_id)))throw new ApiError(`日程“${item.title}”包含不存在或跨旅程的关联`)
   }
@@ -212,6 +227,7 @@ async function replaceDatabase(payload:ExportPayload,attachments:AttachmentRecor
   for(const attachment of attachments)await tx.objectStore('attachments').put(attachment)
   await tx.done
   for(const url of attachmentUrls.values())URL.revokeObjectURL(url);attachmentUrls.clear()
+  await safelySyncAllReminders(payload.itinerary||[])
 }
 
 async function importPayload(payload:ExportPayload){await replaceDatabase(payload);return {message:'导入成功'}}
@@ -256,5 +272,6 @@ export const api={
   trips:resource<Trip>('trips'),destinations:resource<Destination>('destinations'),cities:resource<City>('cities'),itinerary:resource<ItineraryItem>('itinerary'),reservations:resource<Reservation>('reservations'),
   reservationAttachments:{list:listAttachments,upload:uploadAttachment,remove:removeAttachment,fileUrl:(id:number)=>attachmentUrls.get(id)||'#',open:openAttachment},
   inspirations:resource<Inspiration>('inspirations'),places:resource<Place>('places'),routeLegs:resource<RouteLeg>('routeLegs'),expenses:resource<Expense>('expenses'),checklist:resource<ChecklistItem>('checklist'),
+  notifications:{sync:async()=>safelySyncAllReminders(await listEntities<ItineraryItem>('itinerary'))},
   geocode:{search:geocode},export:buildExport,exportArchive,import:importPayload,importArchive,reset,
 }

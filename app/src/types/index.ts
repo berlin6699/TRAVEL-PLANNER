@@ -21,7 +21,7 @@ export interface City {
 export interface ItineraryItem {
   id: number; trip_id: number; title: string; date: string; start_time: string; end_time: string | null; type: ItineraryType
   location: string | null; note: string | null; reservation_id: number | null; reservation_ids?: number[]; inspiration_id?: number | null; place_id: number | null
-  map_url: string | null; image_url: string | null; city_id: number | null
+  map_url: string | null; image_url: string | null; city_id: number | null; reminder_minutes?: number | null
 }
 export interface Reservation {
   id: number; trip_id: number; name: string; type: ReservationType; date: string; time: string | null; status: ReservationStatus

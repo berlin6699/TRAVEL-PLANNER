@@ -1,7 +1,7 @@
 {
   "name": "travel-planner-app",
   "private": true,
-  "version": "1.5.7",
+  "version": "1.6.0",
   "description": "旅途旅行计划器，多端本地数据版。",
   "author": "berlin6699",
   "type": "module",
@@ -29,6 +29,7 @@
     "@capacitor/core": "^8.4.1",
     "@capacitor/file-viewer": "^2.0.1",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",

@@ -71,6 +71,7 @@ class ItineraryItem(Base):
     map_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id", ondelete="SET NULL"), nullable=True, index=True)
+    reminder_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Reservation(Base):

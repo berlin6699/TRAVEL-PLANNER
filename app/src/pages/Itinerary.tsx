@@ -10,6 +10,7 @@ import { EmptyState, ErrorBanner, Loading, Modal, PageHeader } from '../componen
 import { useLoad } from '../hooks/useLoad'
 import { useTrip } from '../contexts/TripContext'
 import { buildAttachmentCounts, buildCitySections, buildItineraryExportTable, itineraryMatches, reservationIdsFor } from '../lib/itinerary'
+import { requestItineraryReminderPermission } from '../services/localNotifications'
 import type { City, ItineraryItem, NewItem, Reservation } from '../types'
 import { formatDate } from '../utils'
 
@@ -48,6 +49,7 @@ export default function Itinerary() {
   }, [requestedCityId])
 
   const save = async (value: NewItem<ItineraryItem>) => {
+    await requestItineraryReminderPermission(value)
     if (editing) await api.itinerary.update(editing.id, value)
     else await api.itinerary.create(value)
     setEditing(undefined)

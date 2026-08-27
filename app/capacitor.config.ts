@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli'
+import type {} from '@capacitor/local-notifications'
 
 const config: CapacitorConfig = {
   appId: 'com.berlin6699.travelplanner',
@@ -18,6 +19,11 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'DARK',
       backgroundColor: '#f7f5ef',
+    },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_travel_notification',
+      iconColor: '#ff7a61',
+      presentationOptions: ['sound', 'banner', 'list'],
     },
   },
 }

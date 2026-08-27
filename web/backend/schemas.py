@@ -126,6 +126,7 @@ class ItineraryBase(ORMModel):
     map_url: str | None = None
     image_url: str | None = None
     city_id: int | None = None
+    reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
 
     _map_url = field_validator("map_url", "image_url", mode="before")(validate_url)
 

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, Clock, Edit3, FileText, History, MapPin, Sparkles, Trash2 } from 'lucide-react'
+import { Bell, ChevronDown, Clock, Edit3, FileText, History, MapPin, Sparkles, Trash2 } from 'lucide-react'
 import { MapButton, type MapTarget } from './MapPreview'
 import { Badge, IconButton } from './UI'
 import { countItineraryItems, groupItineraryByDay, reservationIdsFor, splitItineraryDaysByToday, type ItineraryDayGroup } from '../lib/itinerary'
@@ -112,6 +112,7 @@ function ScheduleCard({
           <h4 className="break-words text-lg font-bold">{item.title}</h4>
           <Badge tone={item.type === '景点' ? 'mint' : 'sky'}>{item.type}</Badge>
           {!hideCity && item.city_id && <Badge tone="stone">{cityById.get(item.city_id)?.name}</Badge>}
+          {item.reminder_minutes != null && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700"><Bell size={12}/>{item.reminder_minutes===0?'开始时提醒':item.reminder_minutes<60?`提前 ${item.reminder_minutes} 分钟`:item.reminder_minutes===1440?'提前 1 天':`提前 ${item.reminder_minutes/60} 小时`}</span>}
         </div>
         {location && <p className="mt-2 flex items-start gap-1.5 break-words text-sm text-stone-500"><MapPin className="mt-0.5 shrink-0" size={15}/>{location}</p>}
         {item.note && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-500">{item.note}</p>}

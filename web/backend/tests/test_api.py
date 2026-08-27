@@ -100,6 +100,7 @@ def test_full_api_flow():
         itinerary_item["reservation_ids"] = reservation_ids
         itinerary_item["reservation_id"] = reservation_ids[0]
         itinerary_item["inspiration_id"] = inspiration_id
+        itinerary_item["reminder_minutes"] = 30
         updated_itinerary = client.put(
             f"/api/itinerary/{itinerary_item['id']}",
             json={key: value for key, value in itinerary_item.items() if key != "id"},
@@ -117,6 +118,7 @@ def test_full_api_flow():
         restored_item = client.get("/api/itinerary").json()[0]
         assert restored_item["reservation_ids"] == reservation_ids
         assert restored_item["inspiration_id"] == inspiration_id
+        assert restored_item["reminder_minutes"] == 30
         assert client.get("/api/reservation-attachments").json() == []
 
         restored = client.post(
@@ -135,6 +137,12 @@ def test_full_api_flow():
 def test_not_found_and_validation():
     with TestClient(app) as client:
         assert client.delete("/api/itinerary/999999").status_code == 404
+        itinerary_item = client.get("/api/itinerary").json()[0]
+        itinerary_item["reminder_minutes"] = 10081
+        assert client.put(
+            f"/api/itinerary/{itinerary_item['id']}",
+            json={key: value for key, value in itinerary_item.items() if key != "id"},
+        ).status_code == 422
         trip = client.get("/api/trip").json()
         trip["end_date"] = "2020-01-01"
         assert client.put("/api/trip", json={k:v for k,v in trip.items() if k != "id"}).status_code == 422

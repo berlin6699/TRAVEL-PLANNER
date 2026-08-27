@@ -75,6 +75,7 @@ def initialize_database() -> None:
             "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE",
             "reservation_ids": "JSON NOT NULL DEFAULT '[]'",
             "inspiration_id": "INTEGER REFERENCES inspirations(id) ON DELETE SET NULL",
+            "reminder_minutes": "INTEGER",
         },
         "reservations": {"city_id": "INTEGER REFERENCES cities(id) ON DELETE SET NULL", "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
         "inspirations": {"trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
