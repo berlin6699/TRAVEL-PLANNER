@@ -61,6 +61,10 @@ class ItineraryItem(Base):
     reservation_id: Mapped[int | None] = mapped_column(
         ForeignKey("reservations.id", ondelete="SET NULL"), nullable=True
     )
+    reservation_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    inspiration_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inspirations.id", ondelete="SET NULL"), nullable=True
+    )
     place_id: Mapped[int | None] = mapped_column(
         ForeignKey("places.id", ondelete="SET NULL"), nullable=True
     )

@@ -46,7 +46,7 @@ SQLite 数据保存在名为 `travel-planner-data` 的 Docker 卷中。`docker c
 docker compose down -v
 ```
 
-默认网页端口为 `8080`。需要更改时，把 `.env.example` 复制为 `.env` 并修改 `TRAVEL_PLANNER_PORT`，或者临时执行：
+默认网页端口为 `8080`，并且只监听本机 `127.0.0.1`。需要更改时，把 `.env.example` 复制为 `.env` 并修改 `TRAVEL_PLANNER_PORT`，或者临时执行：
 
 ```powershell
 $env:TRAVEL_PLANNER_PORT="3000"

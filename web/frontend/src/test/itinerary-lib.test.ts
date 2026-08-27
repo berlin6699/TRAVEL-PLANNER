@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAttachmentCounts, buildCitySections, groupItineraryByDay, splitItineraryDaysByToday } from '../lib/itinerary'
+import { buildAttachmentCounts, buildCitySections, groupItineraryByDay, reservationIdsFor, splitItineraryDaysByToday } from '../lib/itinerary'
 import type { City, ItineraryItem, ReservationAttachment } from '../types'
 
 function itinerary(overrides: Partial<ItineraryItem> = {}): ItineraryItem {
@@ -23,6 +23,10 @@ function itinerary(overrides: Partial<ItineraryItem> = {}): ItineraryItem {
 }
 
 describe('itinerary helpers', () => {
+  it('normalizes legacy and multi-reservation links', () => {
+    expect(reservationIdsFor(itinerary({ reservation_id: 2, reservation_ids: [1, 2, 1] }))).toEqual([1, 2])
+  })
+
   it('groups days by date and sorts items by time', () => {
     const days = groupItineraryByDay([
       itinerary({ id: 1, date: '2026-07-01', start_time: '18:00' }),

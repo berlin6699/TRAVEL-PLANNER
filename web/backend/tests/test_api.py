@@ -94,6 +94,18 @@ def test_full_api_flow():
         assert exported.status_code == 200
         payload = exported.json()
         assert payload["schema_version"] == 1
+        itinerary_item = payload["itinerary"][0]
+        reservation_ids = [item["id"] for item in payload["reservations"][:2]]
+        inspiration_id = payload["inspirations"][0]["id"]
+        itinerary_item["reservation_ids"] = reservation_ids
+        itinerary_item["reservation_id"] = reservation_ids[0]
+        itinerary_item["inspiration_id"] = inspiration_id
+        updated_itinerary = client.put(
+            f"/api/itinerary/{itinerary_item['id']}",
+            json={key: value for key, value in itinerary_item.items() if key != "id"},
+        )
+        assert updated_itinerary.status_code == 200, updated_itinerary.text
+        payload = client.get("/api/export").json()
 
         assert client.delete("/api/reset").status_code == 204
         assert client.get("/api/places").json() == []
@@ -102,6 +114,9 @@ def test_full_api_flow():
         imported = client.post("/api/import", json=payload)
         assert imported.status_code == 200, imported.text
         assert len(client.get("/api/places").json()) == len(payload["places"])
+        restored_item = client.get("/api/itinerary").json()[0]
+        assert restored_item["reservation_ids"] == reservation_ids
+        assert restored_item["inspiration_id"] == inspiration_id
         assert client.get("/api/reservation-attachments").json() == []
 
         restored = client.post(
@@ -182,6 +197,47 @@ def test_multiple_trips_are_isolated_and_cascade():
         assert client.delete(f"/api/trips/{second_id}").status_code == 204
         assert client.get(f"/api/places?trip_id={second_id}").json() == []
         assert client.get(f"/api/destinations?trip_id={second_id}").json() == []
+
+
+def test_archive_restore_rolls_back_when_attachment_write_fails(monkeypatch):
+    with TestClient(app) as client:
+        before = client.get("/api/export").json()
+        reservation_id = before["reservations"][0]["id"]
+        writer = PdfWriter()
+        writer.add_blank_page(width=300, height=200)
+        pdf_buffer = BytesIO()
+        writer.write(pdf_buffer)
+        before["reservation_attachments"] = [{
+            "id": 9999,
+            "reservation_id": reservation_id,
+            "original_name": "rollback.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": len(pdf_buffer.getvalue()),
+            "uploaded_at": "2026-01-01T00:00:00",
+            "archive_path": "attachments/rollback.pdf",
+        }]
+        archive_buffer = BytesIO()
+        with ZipFile(archive_buffer, "w") as archive:
+            archive.writestr("travel-planner.json", json.dumps(before, ensure_ascii=False))
+            archive.writestr("attachments/rollback.pdf", pdf_buffer.getvalue())
+
+        original_replace = Path.replace
+
+        def fail_staged_pdf(self, target):
+            if self.name.endswith(".pdf"):
+                raise OSError("simulated disk failure")
+            return original_replace(self, target)
+
+        monkeypatch.setattr(Path, "replace", fail_staged_pdf)
+        failed = client.post(
+            "/api/import/archive",
+            files={"file": ("rollback.zip", archive_buffer.getvalue(), "application/zip")},
+        )
+        assert failed.status_code == 500
+        after = client.get("/api/export").json()
+        assert [trip["name"] for trip in after["trips"]] == [trip["name"] for trip in before["trips"]]
+        assert len(after["itinerary"]) == len(before["itinerary"])
+        assert client.get("/api/reservation-attachments/9999/file").status_code == 404
 
 
 def teardown_module():

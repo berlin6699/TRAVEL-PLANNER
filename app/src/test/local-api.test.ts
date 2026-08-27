@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import JSZip from 'jszip'
 import { api } from '../api/client'
 
 describe('手机本地数据层',()=>{
@@ -46,5 +47,18 @@ describe('手机本地数据层',()=>{
     expect((await api.itinerary.list({trip_id:trip.id})).find(value=>value.id===item.id)?.inspiration_id).toBe(inspiration.id)
     await api.inspirations.remove(inspiration.id)
     expect((await api.itinerary.list({trip_id:trip.id})).find(value=>value.id===item.id)?.inspiration_id).toBeNull()
+  })
+
+  it('附件校验失败时保留现有数据',async()=>{
+    const [trip]=await api.trips.list()
+    const reservation=await api.reservations.create({trip_id:trip.id,name:'测试车票',type:'车票',date:trip.start_date,time:null,status:'已预约',order_number:null,location:null,note:null,booking_url:null,map_url:null,image_url:null,city_id:null})
+    const payload=await api.export()
+    const zip=new JSZip()
+    zip.file('travel-planner.json',JSON.stringify({...payload,reservation_attachments:[{id:1,reservation_id:reservation.id,original_name:'broken.pdf',archive_path:'attachments/broken.pdf'}]}))
+    zip.file('attachments/broken.pdf','not a pdf')
+    const archive=await zip.generateAsync({type:'blob'})
+    await expect(api.importArchive(new File([archive],'broken.zip',{type:'application/zip'}))).rejects.toThrow('附件不是有效 PDF')
+    expect((await api.trips.list()).some(item=>item.id===trip.id)).toBe(true)
+    expect((await api.reservations.list({trip_id:trip.id})).some(item=>item.id===reservation.id)).toBe(true)
   })
 })

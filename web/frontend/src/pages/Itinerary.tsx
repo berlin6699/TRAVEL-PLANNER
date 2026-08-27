@@ -16,14 +16,15 @@ export default function Itinerary() {
   const { selectedTrip } = useTrip()
   const tripId = selectedTrip!.id
   const { data, loading, error, reload } = useLoad(async () => {
-    const [items, reservations, places, cities, attachments] = await Promise.all([
+    const [items, reservations, inspirations, places, cities, attachments] = await Promise.all([
       api.itinerary.list({ trip_id: tripId }),
       api.reservations.list({ trip_id: tripId }),
+      api.inspirations.list({ trip_id: tripId }),
       api.places.list({ trip_id: tripId }),
       api.cities.list({ trip_id: tripId }),
       api.reservationAttachments.list(tripId),
     ])
-    return { items, reservations, places, cities, attachments }
+    return { items, reservations, inspirations, places, cities, attachments }
   })
 
   const [params, setParams] = useSearchParams()
@@ -62,7 +63,9 @@ export default function Itinerary() {
   if (!data) return <ErrorBanner message={error}/>
 
   const cityById = new Map(data.cities.map(city => [city.id, city]))
+  const placeById = new Map(data.places.map(place => [place.id, place]))
   const reservationById = new Map(data.reservations.map(reservation => [reservation.id, reservation]))
+  const inspirationById = new Map(data.inspirations.map(inspiration => [inspiration.id, inspiration]))
   const attachmentCountByReservation = buildAttachmentCounts(data.attachments)
   const activeCity = requestedCityId ? cityById.get(requestedCityId) : undefined
   const citySections = buildCitySections(activeCity, data.cities, data.items)
@@ -76,7 +79,7 @@ export default function Itinerary() {
     setView('time')
     clearCity()
   }
-  const scheduleProps: Omit<ItineraryScheduleProps, 'items' | 'hideCity'> = { cityById, reservationById, attachmentCountByReservation, onEdit: setEditing, onDelete: remove, onMap: setMapTarget, onReservation: (id: number) => navigate(`/reservations?id=${id}&files=1`) }
+  const scheduleProps: Omit<ItineraryScheduleProps, 'items' | 'hideCity'> = { cityById, placeById, reservationById, inspirationById, attachmentCountByReservation, onEdit: setEditing, onDelete: remove, onMap: setMapTarget, onReservation: (id: number) => navigate(`/reservations?id=${id}&files=1`), onInspiration: (id: number) => navigate(`/inspirations?id=${id}`) }
 
   return <div>
     <PageHeader title="城市日程" description="默认按日期和时间查看整段旅程，也可以切换成按城市归类。" action="新增日程" onAction={() => setEditing(null)}/>
@@ -90,7 +93,7 @@ export default function Itinerary() {
     </div>
     {!data.items.length ? <EmptyState title="还没有日程" message="从抵达、入住或第一项活动开始安排吧。" action="新增日程" onAction={() => setEditing(null)}/> : view === 'time' ? <ItinerarySchedule items={data.items} {...scheduleProps}/> : activeCity && !citySections[0][1].length ? <EmptyState title={`${activeCity.name}还没有日程`} message="可以新增一项日程，并把它归到这座城市。" action="新增日程" onAction={() => setEditing(null)}/> : <CityScheduleSections sections={citySections} scheduleProps={scheduleProps}/>}
     <Modal open={editing !== undefined} title={editing ? '编辑日程' : '新增日程'} onClose={() => setEditing(undefined)}>
-      <ItineraryForm key={editing?.id || 'new'} item={editing} reservations={data.reservations} places={data.places} cities={data.cities} tripId={tripId} onSave={save} onCancel={() => setEditing(undefined)}/>
+      <ItineraryForm key={editing?.id || 'new'} item={editing} reservations={data.reservations} inspirations={data.inspirations} places={data.places} cities={data.cities} tripId={tripId} onSave={save} onCancel={() => setEditing(undefined)}/>
     </Modal>
     <MapPreview target={mapTarget} onClose={() => setMapTarget(null)}/>
   </div>

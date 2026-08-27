@@ -5,6 +5,12 @@ export interface ItineraryDayGroup {
   items: ItineraryItem[]
 }
 
+export function reservationIdsFor(item: ItineraryItem) {
+  return [...(item.reservation_ids || []), item.reservation_id]
+    .filter((id): id is number => Boolean(id))
+    .filter((id, index, all) => all.indexOf(id) === index)
+}
+
 export function groupItineraryByDay(items: ItineraryItem[]): ItineraryDayGroup[] {
   const groups = items.reduce<Record<string, ItineraryItem[]>>((result, item) => {
     ;(result[item.date] ??= []).push(item)

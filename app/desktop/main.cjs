@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const APP_NAME = '旅途 Travel Planner'
 const DATA_DIR_NAME = 'Travel Planner'
 const isDev = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
+const EXTERNAL_PROTOCOLS = new Set(['https:', 'http:'])
 
 app.setName(APP_NAME)
 app.setPath('userData', path.join(app.getPath('appData'), DATA_DIR_NAME))
@@ -24,6 +25,15 @@ function ensureDataDirectory() {
   fs.mkdirSync(app.getPath('userData'), { recursive: true })
 }
 
+function openExternalSafely(url) {
+  try {
+    const parsed = new URL(url)
+    if (EXTERNAL_PROTOCOLS.has(parsed.protocol)) void shell.openExternal(parsed.toString())
+  } catch {
+    // Ignore malformed or unsupported links from imported data.
+  }
+}
+
 function createWindow() {
   ensureDataDirectory()
 
@@ -40,16 +50,32 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
   win.once('ready-to-show', () => win.show())
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('blob:') || url.startsWith('file:')) return { action: 'allow' }
-    void shell.openExternal(url)
+    if (url.startsWith('blob:')) return { action: 'allow' }
+    openExternalSafely(url)
     return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const current = win.webContents.getURL()
+    try {
+      const nextUrl = new URL(url)
+      const currentUrl = new URL(current)
+      const sameDocument = currentUrl.protocol === 'file:'
+        ? nextUrl.protocol === 'file:' && nextUrl.pathname === currentUrl.pathname
+        : nextUrl.origin === currentUrl.origin
+      if (sameDocument) return
+    } catch {
+      // Invalid navigations are blocked below.
+    }
+    event.preventDefault()
+    openExternalSafely(url)
   })
 
   if (isDev) {

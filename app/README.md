@@ -46,6 +46,15 @@ npm run android:apk
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`。
 
+GitHub Release 只发布签名后的正式 APK。首次发布前，需要在仓库 Actions secrets 中配置：
+
+- `ANDROID_KEYSTORE_BASE64`：发布 keystore 的 Base64 内容
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `ANDROID_STORE_PASSWORD`
+
+密钥不完整时发布工作流会直接停止，避免误把 Debug 或未签名 APK 当作正式安装包。
+
 最新版 Android APK、macOS 和 Windows 安装包集中放在 GitHub Release：[`app-v1.5.7`](https://github.com/berlin6699/TRAVEL-PLANNER/releases/tag/app-v1.5.7)。
 
 ## iPhone

@@ -70,7 +70,12 @@ def initialize_database() -> None:
             "latitude": "NUMERIC(9, 6)", "longitude": "NUMERIC(9, 6)",
             "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE",
         },
-        "itinerary_items": {"city_id": "INTEGER REFERENCES cities(id) ON DELETE SET NULL", "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
+        "itinerary_items": {
+            "city_id": "INTEGER REFERENCES cities(id) ON DELETE SET NULL",
+            "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE",
+            "reservation_ids": "JSON NOT NULL DEFAULT '[]'",
+            "inspiration_id": "INTEGER REFERENCES inspirations(id) ON DELETE SET NULL",
+        },
         "reservations": {"city_id": "INTEGER REFERENCES cities(id) ON DELETE SET NULL", "trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
         "inspirations": {"trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
         "route_legs": {"trip_id": "INTEGER REFERENCES trip_info(id) ON DELETE CASCADE"},
@@ -320,6 +325,11 @@ def update_reservation(item_id: int, payload: ReservationCreate, db: Session = D
 def delete_reservation(item_id: int, db: Session = Depends(get_db)):
     reservation = crud.get_or_404(db, Reservation, item_id)
     stored_names = list(db.scalars(select(ReservationAttachment.stored_name).where(ReservationAttachment.reservation_id == item_id)))
+    for itinerary_item in db.scalars(select(ItineraryItem)):
+        linked_ids = [linked_id for linked_id in (itinerary_item.reservation_ids or []) if linked_id != item_id]
+        if linked_ids != (itinerary_item.reservation_ids or []):
+            itinerary_item.reservation_ids = linked_ids
+            itinerary_item.reservation_id = linked_ids[0] if linked_ids else None
     crud.delete_item(db, reservation)
     remove_upload_files(stored_names)
     return Response(status_code=204)
@@ -568,52 +578,82 @@ def export_archive(db: Session = Depends(get_db)):
     )
 
 
-@app.post("/api/import", response_model=ImportResult)
-def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
+def replace_data(payload: ExportPayload, db: Session, *, commit: bool = True, remove_old_uploads: bool = True) -> ImportResult:
     old_uploads = list(db.scalars(select(ReservationAttachment.stored_name)))
     trips_to_import = payload.trips or [payload.trip]
     trip_ids = {item.id for item in trips_to_import}
     reservation_ids = {item.id for item in payload.reservations}
+    inspiration_ids = {item.id for item in payload.inspirations}
     place_ids = {item.id for item in payload.places}
     itinerary_ids = {item.id for item in payload.itinerary}
     city_ids = {item.id for item in payload.cities}
     destination_ids = {item.id for item in payload.destinations}
+    reservation_trips = {item.id: item.trip_id for item in payload.reservations}
+    inspiration_trips = {item.id: item.trip_id for item in payload.inspirations}
+    place_trips = {item.id: item.trip_id for item in payload.places}
+    itinerary_trips = {item.id: item.trip_id for item in payload.itinerary}
+    city_trips = {item.id: item.trip_id for item in payload.cities}
+    destination_trips = {item.id: item.trip_id for item in payload.destinations}
     for item in payload.destinations:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"目的地 {item.id} 引用了不存在的旅程")
         if item.parent_id and item.parent_id not in destination_ids:
             raise HTTPException(400, f"目的地 {item.id} 引用了不存在的上级地区")
+        if item.parent_id and destination_trips[item.parent_id] != item.trip_id:
+            raise HTTPException(400, f"目的地 {item.id} 引用了其他旅程的上级地区")
     for item in payload.cities:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"城市 {item.id} 引用了不存在的旅程")
         if item.destination_id and item.destination_id not in destination_ids:
             raise HTTPException(400, f"城市 {item.id} 引用了不存在的国家或地区")
+        if item.destination_id and destination_trips[item.destination_id] != item.trip_id:
+            raise HTTPException(400, f"城市 {item.id} 引用了其他旅程的国家或地区")
     for item in payload.itinerary:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"日程 {item.id} 引用了不存在的旅程")
         if item.reservation_id and item.reservation_id not in reservation_ids:
             raise HTTPException(400, f"日程 {item.id} 引用了不存在的预约")
+        if any(reservation_id not in reservation_ids for reservation_id in item.reservation_ids):
+            raise HTTPException(400, f"日程 {item.id} 引用了不存在的预约")
+        if any(reservation_trips[reservation_id] != item.trip_id for reservation_id in item.reservation_ids):
+            raise HTTPException(400, f"日程 {item.id} 引用了其他旅程的预约")
+        if item.inspiration_id and item.inspiration_id not in inspiration_ids:
+            raise HTTPException(400, f"日程 {item.id} 引用了不存在的灵感")
+        if item.inspiration_id and inspiration_trips[item.inspiration_id] != item.trip_id:
+            raise HTTPException(400, f"日程 {item.id} 引用了其他旅程的灵感")
         if item.place_id and item.place_id not in place_ids:
             raise HTTPException(400, f"日程 {item.id} 引用了不存在的地点")
+        if item.place_id and place_trips[item.place_id] != item.trip_id:
+            raise HTTPException(400, f"日程 {item.id} 引用了其他旅程的地点")
         if item.city_id and item.city_id not in city_ids:
             raise HTTPException(400, f"日程 {item.id} 引用了不存在的城市")
+        if item.city_id and city_trips[item.city_id] != item.trip_id:
+            raise HTTPException(400, f"日程 {item.id} 引用了其他旅程的城市")
     for item in payload.places:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"地点 {item.id} 引用了不存在的旅程")
         if item.city_id and item.city_id not in city_ids:
             raise HTTPException(400, f"地点 {item.id} 引用了不存在的城市")
+        if item.city_id and city_trips[item.city_id] != item.trip_id:
+            raise HTTPException(400, f"地点 {item.id} 引用了其他旅程的城市")
     for item in payload.reservations:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"预约 {item.id} 引用了不存在的旅程")
         if item.city_id and item.city_id not in city_ids:
             raise HTTPException(400, f"预约 {item.id} 引用了不存在的城市")
+        if item.city_id and city_trips[item.city_id] != item.trip_id:
+            raise HTTPException(400, f"预约 {item.id} 引用了其他旅程的城市")
     for item in payload.route_legs:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"路线 {item.id} 引用了不存在的旅程")
         if item.from_place_id not in place_ids or item.to_place_id not in place_ids:
             raise HTTPException(400, f"路线 {item.id} 引用了不存在的地点")
+        if place_trips[item.from_place_id] != item.trip_id or place_trips[item.to_place_id] != item.trip_id:
+            raise HTTPException(400, f"路线 {item.id} 引用了其他旅程的地点")
         if item.reservation_id and item.reservation_id not in reservation_ids:
             raise HTTPException(400, f"路线 {item.id} 引用了不存在的预约")
+        if item.reservation_id and reservation_trips[item.reservation_id] != item.trip_id:
+            raise HTTPException(400, f"路线 {item.id} 引用了其他旅程的预约")
     for item in payload.inspirations:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"灵感 {item.id} 引用了不存在的旅程")
@@ -622,8 +662,12 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
             raise HTTPException(400, f"消费 {item.id} 引用了不存在的旅程")
         if item.itinerary_id and item.itinerary_id not in itinerary_ids:
             raise HTTPException(400, f"消费 {item.id} 引用了不存在的日程")
+        if item.itinerary_id and itinerary_trips[item.itinerary_id] != item.trip_id:
+            raise HTTPException(400, f"消费 {item.id} 引用了其他旅程的日程")
         if item.reservation_id and item.reservation_id not in reservation_ids:
             raise HTTPException(400, f"消费 {item.id} 引用了不存在的预约")
+        if item.reservation_id and reservation_trips[item.reservation_id] != item.trip_id:
+            raise HTTPException(400, f"消费 {item.id} 引用了其他旅程的预约")
     for item in payload.checklist:
         if item.trip_id not in trip_ids:
             raise HTTPException(400, f"清单 {item.id} 引用了不存在的旅程")
@@ -649,8 +693,16 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
         db.flush()
         db.add_all([ChecklistItem(**item.model_dump()) for item in payload.checklist])
         db.flush()
-        db.commit()
-        remove_upload_files(old_uploads)
+        if commit:
+            db.commit()
+            if remove_old_uploads:
+                try:
+                    remove_upload_files(old_uploads)
+                except OSError:
+                    # The restore succeeded; stale orphan files can be cleaned later.
+                    pass
+        else:
+            db.flush()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(400, "导入数据存在重复 ID 或无效关联") from exc
@@ -667,6 +719,11 @@ def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/import", response_model=ImportResult)
+def import_data(payload: ExportPayload, db: Session = Depends(get_db)):
+    return replace_data(payload, db)
+
+
 @app.post("/api/import/archive", response_model=ImportResult)
 async def import_archive(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not (file.filename or "").lower().endswith(".zip"):
@@ -677,6 +734,7 @@ async def import_archive(file: UploadFile = File(...), db: Session = Depends(get
     staging_dir = Path(tempfile.mkdtemp(prefix="import-", dir=UPLOAD_DIR))
     staged: list[dict] = []
     moved_files: list[str] = []
+    old_uploads = list(db.scalars(select(ReservationAttachment.stored_name)))
     try:
         try:
             archive = ZipFile(BytesIO(raw), "r")
@@ -722,7 +780,7 @@ async def import_archive(file: UploadFile = File(...), db: Session = Depends(get
                     "stored_name": staged_name, "mime_type": "application/pdf",
                     "size_bytes": len(content), "uploaded_at": uploaded_at,
                 })
-        result = import_data(payload, db)
+        result = replace_data(payload, db, commit=False, remove_old_uploads=False)
         try:
             records = []
             for item in staged:
@@ -736,7 +794,12 @@ async def import_archive(file: UploadFile = File(...), db: Session = Depends(get
         except Exception:
             db.rollback()
             remove_upload_files(moved_files)
-            raise HTTPException(500, "结构化数据已恢复，但 PDF 文件写入失败")
+            raise HTTPException(500, "备份恢复失败，原数据已保留")
+        try:
+            remove_upload_files(old_uploads)
+        except OSError:
+            # Do not report failure after the database and new files committed.
+            pass
         result.counts["attachments"] = len(staged)
         return result
     finally:

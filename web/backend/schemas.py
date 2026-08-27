@@ -120,6 +120,8 @@ class ItineraryBase(ORMModel):
     location: str | None = None
     note: str | None = None
     reservation_id: int | None = None
+    reservation_ids: list[int] = Field(default_factory=list)
+    inspiration_id: int | None = None
     place_id: int | None = None
     map_url: str | None = None
     image_url: str | None = None
@@ -131,6 +133,9 @@ class ItineraryBase(ORMModel):
     def validate_times(self):
         if self.end_time is not None and self.end_time <= self.start_time:
             raise ValueError("结束时间必须晚于开始时间")
+        reservation_ids = [item for item in [*self.reservation_ids, self.reservation_id] if item is not None]
+        self.reservation_ids = list(dict.fromkeys(reservation_ids))
+        self.reservation_id = self.reservation_ids[0] if self.reservation_ids else None
         return self
 
 

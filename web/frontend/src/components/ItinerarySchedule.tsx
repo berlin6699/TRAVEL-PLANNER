@@ -1,24 +1,27 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, Clock, Edit3, FileText, History, MapPin, NotebookTabs, Trash2 } from 'lucide-react'
+import { ChevronDown, Clock, Edit3, FileText, History, MapPin, Sparkles, Trash2 } from 'lucide-react'
 import { MapButton, type MapTarget } from './MapPreview'
 import { Badge, IconButton } from './UI'
-import { countItineraryItems, groupItineraryByDay, splitItineraryDaysByToday, type ItineraryDayGroup } from '../lib/itinerary'
-import type { City, ItineraryItem, Reservation } from '../types'
+import { countItineraryItems, groupItineraryByDay, reservationIdsFor, splitItineraryDaysByToday, type ItineraryDayGroup } from '../lib/itinerary'
+import type { City, Inspiration, ItineraryItem, Place, Reservation } from '../types'
 import { formatDate, todayDateKey } from '../utils'
 
 export interface ItineraryScheduleProps {
   items: ItineraryItem[]
   cityById: Map<number, City>
+  placeById: Map<number, Place>
   reservationById: Map<number, Reservation>
+  inspirationById: Map<number, Inspiration>
   attachmentCountByReservation: Map<number, number>
   hideCity?: boolean
   onEdit: (item: ItineraryItem) => void
   onDelete: (item: ItineraryItem) => Promise<void>
   onMap: (target: MapTarget) => void
   onReservation: (id: number) => void
+  onInspiration: (id: number) => void
 }
 
-export function ItinerarySchedule({ items, cityById, reservationById, attachmentCountByReservation, hideCity = false, onEdit, onDelete, onMap, onReservation }: ItineraryScheduleProps) {
+export function ItinerarySchedule({ items, cityById, placeById, reservationById, inspirationById, attachmentCountByReservation, hideCity = false, onEdit, onDelete, onMap, onReservation, onInspiration }: ItineraryScheduleProps) {
   const today = todayDateKey()
   const [showPast, setShowPast] = useState(false)
   const dayGroups = useMemo(() => groupItineraryByDay(items), [items])
@@ -27,9 +30,9 @@ export function ItinerarySchedule({ items, cityById, reservationById, attachment
 
   return <div className="space-y-7">
     {pastCount > 0 && <PastDaysDisclosure days={pastDays} count={pastCount} open={showPast} onToggle={() => setShowPast(value => !value)}>
-      {pastDays.map(day => <ScheduleDay key={day.date} day={day} today={today} isPast cityById={cityById} reservationById={reservationById} attachmentCountByReservation={attachmentCountByReservation} hideCity={hideCity} onEdit={onEdit} onDelete={onDelete} onMap={onMap} onReservation={onReservation}/>)}
+      {pastDays.map(day => <ScheduleDay key={day.date} day={day} today={today} isPast cityById={cityById} placeById={placeById} reservationById={reservationById} inspirationById={inspirationById} attachmentCountByReservation={attachmentCountByReservation} hideCity={hideCity} onEdit={onEdit} onDelete={onDelete} onMap={onMap} onReservation={onReservation} onInspiration={onInspiration}/>)}
     </PastDaysDisclosure>}
-    {currentDays.map(day => <ScheduleDay key={day.date} day={day} today={today} cityById={cityById} reservationById={reservationById} attachmentCountByReservation={attachmentCountByReservation} hideCity={hideCity} onEdit={onEdit} onDelete={onDelete} onMap={onMap} onReservation={onReservation}/>)}
+    {currentDays.map(day => <ScheduleDay key={day.date} day={day} today={today} cityById={cityById} placeById={placeById} reservationById={reservationById} inspirationById={inspirationById} attachmentCountByReservation={attachmentCountByReservation} hideCity={hideCity} onEdit={onEdit} onDelete={onDelete} onMap={onMap} onReservation={onReservation} onInspiration={onInspiration}/>)}
     {!currentDays.length && pastCount > 0 && <div className="rounded-3xl border border-dashed border-coral-200 bg-coral-50/50 p-6 text-center text-sm leading-6 text-stone-500">今天和之后暂时没有日程，过去的安排已经收纳在上方。</div>}
   </div>
 }
@@ -66,10 +69,12 @@ function ScheduleDay(props: Omit<ItineraryScheduleProps, 'items'> & { day: Itine
   </div>
 }
 
-function ScheduleCard({ item, isPast = false, cityById, reservationById, attachmentCountByReservation, hideCity, onEdit, onDelete, onMap, onReservation }: Omit<ItineraryScheduleProps, 'items'> & { item: ItineraryItem; day: ItineraryDayGroup; today: string; isPast?: boolean }) {
-  const reservation = item.reservation_id ? reservationById.get(item.reservation_id) : undefined
-  const attachmentCount = item.reservation_id ? attachmentCountByReservation.get(item.reservation_id) || 0 : 0
-  const isTicket = reservation && ['车票', '机票'].includes(reservation.type)
+function ScheduleCard({ item, isPast = false, cityById, placeById, reservationById, inspirationById, attachmentCountByReservation, hideCity, onEdit, onDelete, onMap, onReservation, onInspiration }: Omit<ItineraryScheduleProps, 'items'> & { item: ItineraryItem; day: ItineraryDayGroup; today: string; isPast?: boolean }) {
+  const place = item.place_id ? placeById.get(item.place_id) : undefined
+  const inspiration = item.inspiration_id ? inspirationById.get(item.inspiration_id) : undefined
+  const reservations = reservationIdsFor(item).map(id => reservationById.get(id)).filter((reservation): reservation is Reservation => Boolean(reservation))
+  const location = place ? [place.name, place.address].filter(Boolean).join(' · ') : item.location
+  const mapUrl = item.map_url || place?.map_url
 
   return <article className={`card relative p-5 ${isPast ? 'bg-white/80 opacity-90' : ''}`}>
     <span className={`absolute -left-[27px] top-7 h-3 w-3 rounded-full ring-4 sm:-left-[39px] ${isPast ? 'bg-stone-300 ring-white' : 'bg-coral-500 ring-cream'}`}/>
@@ -81,11 +86,12 @@ function ScheduleCard({ item, isPast = false, cityById, reservationById, attachm
           <Badge tone={item.type === '景点' ? 'mint' : 'sky'}>{item.type}</Badge>
           {!hideCity && item.city_id && <Badge tone="stone">{cityById.get(item.city_id)?.name}</Badge>}
         </div>
-        {item.location && <p className="mt-2 flex items-start gap-1.5 break-words text-sm text-stone-500"><MapPin className="mt-0.5 shrink-0" size={15}/>{item.location}</p>}
+        {location && <p className="mt-2 flex items-start gap-1.5 break-words text-sm text-stone-500"><MapPin className="mt-0.5 shrink-0" size={15}/>{location}</p>}
         {item.note && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-500">{item.note}</p>}
         <div className="mt-4 flex flex-wrap gap-4">
-          {item.map_url && <MapButton target={{ title: item.title, url: item.map_url, query: item.location }} onOpen={onMap}/>}
-          {item.reservation_id && <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-coral-600" onClick={() => onReservation(item.reservation_id!)}>{isTicket ? <FileText size={15}/> : <NotebookTabs size={15}/>}查看{isTicket ? `${reservation.type}文件` : '预约'}{attachmentCount ? ` (${attachmentCount})` : ''}</button>}
+          {mapUrl && <MapButton target={{ title: item.title, url: mapUrl, query: location }} onOpen={onMap}/>}
+          {inspiration && <button className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold text-mint-600" onClick={() => onInspiration(inspiration.id)}><Sparkles size={15}/>查看灵感 · <span className="max-w-48 truncate">{inspiration.title}</span></button>}
+          {reservations.map(reservation => { const attachmentCount=attachmentCountByReservation.get(reservation.id)||0; return <button key={reservation.id} className="inline-flex items-center gap-1.5 text-sm font-semibold text-coral-600" onClick={() => onReservation(reservation.id)}><FileText size={15}/>查看 {reservation.name}{attachmentCount ? ` 的 PDF (${attachmentCount})` : ' 预约'}</button> })}
         </div>
       </div>
       <div className="flex shrink-0"><IconButton aria-label="编辑" onClick={() => onEdit(item)}><Edit3 size={17}/></IconButton><IconButton aria-label="删除" onClick={() => void onDelete(item)}><Trash2 size={17}/></IconButton></div>

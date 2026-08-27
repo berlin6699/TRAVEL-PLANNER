@@ -49,13 +49,15 @@ open desktop-dist
 
 永久解决需要 Apple Developer 账号，并在 GitHub Actions 中配置签名和公证所需的 Secrets：
 
-- `CSC_LINK`：Developer ID Application 证书导出的 `.p12`，再转成 Base64
-- `CSC_KEY_PASSWORD`：`.p12` 的密码
+- `MACOS_CSC_LINK`：Developer ID Application 证书导出的 `.p12`，再转成 Base64
+- `MACOS_CSC_KEY_PASSWORD`：`.p12` 的密码
 - `APPLE_ID`：Apple ID 邮箱
 - `APPLE_APP_SPECIFIC_PASSWORD`：Apple 账号的 App 专用密码
 - `APPLE_TEAM_ID`：Apple Developer Team ID
 
 不要把这些内容写进代码，也不要发到聊天里。配置到 GitHub 仓库的 Actions Secrets 后，再发布新版，macOS 安装包才能做到对普通用户更友好。
+
+Windows Release 同样要求配置 `WINDOWS_CSC_LINK` 和 `WINDOWS_CSC_KEY_PASSWORD`。发布工作流会把这些值映射给 electron-builder；任何平台缺少签名密钥都会停止发布，而不是上传未签名安装包。
 
 ## 本地构建产物怎么整理
 

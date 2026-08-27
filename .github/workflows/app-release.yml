@@ -37,12 +37,27 @@ jobs:
           java-version: 21
       - uses: android-actions/setup-android@v3
       - run: npm ci
+      - run: npm test
       - run: npm run android:sync
-      - run: cd android && ./gradlew assembleDebug
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_KEY_PASSWORD" && test -n "$ANDROID_STORE_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+      - name: Build signed release APK
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: cd android && ./gradlew assembleRelease
       - run: |
           version="${RELEASE_TAG#app-v}"
           mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk "release/TravelPlanner-v${version}-debug.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "release/TravelPlanner-v${version}.apk"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -57,6 +72,12 @@ jobs:
     defaults:
       run:
         working-directory: app
+    env:
+      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,6 +86,9 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - run: npm test
+      - name: Verify macOS signing and notarization secrets
+        run: test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" && test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
       - run: npm run desktop:mac:arm64
       - run: npm run desktop:mac:x64
       - run: |
@@ -86,6 +110,9 @@ jobs:
     defaults:
       run:
         working-directory: app
+    env:
+      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -94,6 +121,13 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - run: npm test
+      - name: Verify Windows signing secrets
+        shell: pwsh
+        run: |
+          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) {
+            throw 'WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD are required'
+          }
       - run: npm run desktop:win
       - shell: pwsh
         run: |

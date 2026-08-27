@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { FileViewer } from '@capacitor/file-viewer'
 import { openDB } from 'idb'
-import JSZip from 'jszip'
 import type { ChecklistItem, City, Destination, Expense, ExportPayload, GeocodeResult, Inspiration, ItineraryItem, NewItem, Place, Reservation, ReservationAttachment, RouteLeg, Trip } from '../types'
 
 type Entity = Trip | Destination | City | ItineraryItem | Reservation | Inspiration | Place | RouteLeg | Expense | ChecklistItem
@@ -13,6 +12,10 @@ const DATABASE_NAME='travel-planner-android'
 const ENTITY_STORES:EntityStore[]=['trips','destinations','cities','itinerary','reservations','inspirations','places','routeLegs','expenses','checklist']
 const ALL_STORES=[...ENTITY_STORES,'attachments'] as const
 const attachmentUrls=new Map<number,string>()
+const MAX_PDF_BYTES=15*1024*1024
+const MAX_ARCHIVE_BYTES=250*1024*1024
+const MAX_ARCHIVE_CONTENT_BYTES=300*1024*1024
+const MAX_ARCHIVE_FILES=1000
 
 const dbPromise=openDB(DATABASE_NAME,1,{upgrade(db){
   for(const name of ALL_STORES)if(!db.objectStoreNames.contains(name))db.createObjectStore(name,{keyPath:'id',autoIncrement:true})
@@ -119,7 +122,7 @@ async function listAttachments(tripId:number):Promise<ReservationAttachment[]>{
 }
 
 async function uploadAttachment(reservationId:number,file:File):Promise<ReservationAttachment>{
-  if(file.size>15*1024*1024)throw new ApiError('PDF 文件不能超过 15 MB',413)
+  if(file.size>MAX_PDF_BYTES)throw new ApiError('PDF 文件不能超过 15 MB',413)
   const data=await file.arrayBuffer(),signature=new TextDecoder().decode(data.slice(0,5))
   if(!signature.startsWith('%PDF-'))throw new ApiError('文件不是有效的 PDF')
   const value={reservation_id:reservationId,original_name:file.name,mime_type:'application/pdf',size_bytes:file.size,uploaded_at:new Date().toISOString(),data}
@@ -162,6 +165,7 @@ async function buildExport():Promise<ExportPayload>{
 }
 
 async function exportArchive(){
+  const {default:JSZip}=await import('jszip')
   const db=await dbPromise,payload=await buildExport(),files=await db.getAll('attachments') as AttachmentRecord[],zip=new JSZip(),manifest:any={...payload,reservation_attachments:[]}
   for(const file of files){
     const archivePath=`attachments/${file.id}-${file.original_name.replace(/[\\/]/g,'_')}`
@@ -178,25 +182,64 @@ async function clearDatabase(){
 }
 
 function validatePayload(payload:ExportPayload){
-  if(payload?.schema_version!==1||!Array.isArray(payload.trips)&&!payload.trip||!Array.isArray(payload.itinerary))throw new ApiError('备份数据格式无效')
+  if(!payload||payload.schema_version!==1||(!Array.isArray(payload.trips)&&!payload.trip)||!Array.isArray(payload.itinerary))throw new ApiError('备份数据格式无效')
+  const collections=[payload.trips?.length?payload.trips:[payload.trip],payload.destinations||[],payload.cities||[],payload.itinerary,payload.reservations||[],payload.inspirations||[],payload.places||[],payload.route_legs||[],payload.expenses||[],payload.checklist||[]]
+  if(collections.some(rows=>!Array.isArray(rows)||rows.some(row=>!row||!Number.isInteger(Number(row.id))||Number(row.id)<=0)))throw new ApiError('备份数据包含无效记录')
+  const trips=collections[0] as Trip[],tripIds=new Set(trips.map(item=>item.id)),reservations=payload.reservations||[],reservationIds=new Set(reservations.map(item=>item.id)),inspirations=payload.inspirations||[],inspirationIds=new Set(inspirations.map(item=>item.id))
+  const reservationTrips=new Map(reservations.map(item=>[item.id,item.trip_id])),inspirationTrips=new Map(inspirations.map(item=>[item.id,item.trip_id]))
+  const tripRecords=[...(payload.destinations||[]),...(payload.cities||[]),...payload.itinerary,...reservations,...(payload.inspirations||[]),...(payload.places||[]),...(payload.route_legs||[]),...(payload.expenses||[]),...(payload.checklist||[])] as Array<{trip_id:number}>
+  if(tripRecords.some(item=>!tripIds.has(item.trip_id)))throw new ApiError('备份数据包含跨旅程或不存在的关联')
+  for(const item of payload.itinerary){
+    const normalized=normalizeItinerary(item)
+    if((normalized.reservation_ids||[]).some(id=>!reservationIds.has(id)||reservationTrips.get(id)!==item.trip_id)||(normalized.inspiration_id&&(!inspirationIds.has(normalized.inspiration_id)||inspirationTrips.get(normalized.inspiration_id)!==item.trip_id)))throw new ApiError(`日程“${item.title}”包含不存在或跨旅程的关联`)
+  }
+  const urls=[
+    ...payload.itinerary.flatMap(item=>[item.map_url,item.image_url]),
+    ...reservations.flatMap(item=>[item.booking_url,item.map_url,item.image_url]),
+    ...(payload.inspirations||[]).flatMap(item=>[item.url,item.image_url]),
+    ...(payload.places||[]).flatMap(item=>[item.map_url,item.image_url]),
+  ].filter((value):value is string=>Boolean(value))
+  if(urls.some(value=>{try{return !['http:','https:'].includes(new URL(value).protocol)}catch{return true}}))throw new ApiError('备份数据包含不安全的链接')
 }
 
-async function importPayload(payload:ExportPayload){
-  validatePayload(payload);await clearDatabase();const db=await dbPromise
-  const collections:[EntityStore,any[]][]=[['trips',payload.trips?.length?payload.trips:[payload.trip]],['destinations',payload.destinations||[]],['cities',payload.cities||[]],['itinerary',payload.itinerary||[]],['reservations',payload.reservations||[]],['inspirations',payload.inspirations||[]],['places',payload.places||[]],['routeLegs',payload.route_legs||[]],['expenses',payload.expenses||[]],['checklist',payload.checklist||[]]]
-  const tx=db.transaction(ENTITY_STORES,'readwrite');for(const [store,rows] of collections)for(const row of rows)await tx.objectStore(store).put(store==='itinerary'?normalizeItinerary(row as ItineraryItem):row);await tx.done;await ensureInitialized();return {message:'导入成功'}
+function payloadCollections(payload:ExportPayload):[EntityStore,any[]][] { return [['trips',payload.trips?.length?payload.trips:[payload.trip]],['destinations',payload.destinations||[]],['cities',payload.cities||[]],['itinerary',payload.itinerary||[]],['reservations',payload.reservations||[]],['inspirations',payload.inspirations||[]],['places',payload.places||[]],['routeLegs',payload.route_legs||[]],['expenses',payload.expenses||[]],['checklist',payload.checklist||[]]] }
+
+async function replaceDatabase(payload:ExportPayload,attachments:AttachmentRecord[]=[]){
+  validatePayload(payload)
+  const db=await dbPromise,tx=db.transaction(ALL_STORES as unknown as string[],'readwrite')
+  for(const store of ALL_STORES)await tx.objectStore(store).clear()
+  for(const [store,rows] of payloadCollections(payload))for(const row of rows)await tx.objectStore(store).put(store==='itinerary'?normalizeItinerary(row as ItineraryItem):row)
+  for(const attachment of attachments)await tx.objectStore('attachments').put(attachment)
+  await tx.done
+  for(const url of attachmentUrls.values())URL.revokeObjectURL(url);attachmentUrls.clear()
 }
+
+async function importPayload(payload:ExportPayload){await replaceDatabase(payload);return {message:'导入成功'}}
 
 async function importArchive(file:File){
-  const zip=await JSZip.loadAsync(await file.arrayBuffer()),manifestFile=zip.file('travel-planner.json')
-  if(!manifestFile)throw new ApiError('ZIP 中缺少 travel-planner.json')
-  const manifest=JSON.parse(await manifestFile.async('text'));await importPayload(manifest as ExportPayload)
-  const db=await dbPromise,attachments=Array.isArray(manifest.reservation_attachments)?manifest.reservation_attachments:[]
-  for(const item of attachments){
-    const archived=zip.file(String(item.archive_path));if(!archived)throw new ApiError(`ZIP 中缺少附件：${item.original_name}`)
-    const data=await archived.async('arraybuffer'),signature=new TextDecoder().decode(data.slice(0,5));if(!signature.startsWith('%PDF-'))throw new ApiError(`附件不是有效 PDF：${item.original_name}`)
-    await db.put('attachments',{id:Number(item.id),reservation_id:Number(item.reservation_id),original_name:String(item.original_name),mime_type:'application/pdf',size_bytes:data.byteLength,uploaded_at:String(item.uploaded_at||new Date().toISOString()),data})
+  const {default:JSZip}=await import('jszip')
+  if(file.size>MAX_ARCHIVE_BYTES)throw new ApiError('完整备份 ZIP 不能超过 250 MB',413)
+  const zip=await JSZip.loadAsync(await file.arrayBuffer()),entries=Object.values(zip.files)
+  if(entries.length>MAX_ARCHIVE_FILES)throw new ApiError('ZIP 中的文件数量过多',413)
+  const declaredBytes=entries.reduce((sum,entry)=>sum+((entry as unknown as {_data?:{uncompressedSize?:number}})._data?.uncompressedSize||0),0)
+  if(declaredBytes>MAX_ARCHIVE_CONTENT_BYTES)throw new ApiError('ZIP 解压后的内容过大',413)
+  const manifestFile=zip.file('travel-planner.json');if(!manifestFile)throw new ApiError('ZIP 中缺少 travel-planner.json')
+  const manifest=JSON.parse(await manifestFile.async('text')) as ExportPayload&{reservation_attachments?:Array<Record<string,unknown>>}
+  validatePayload(manifest)
+  const reservationIds=new Set((manifest.reservations||[]).map(item=>item.id)),metadata=Array.isArray(manifest.reservation_attachments)?manifest.reservation_attachments:[],seenPaths=new Set<string>(),attachments:AttachmentRecord[]=[]
+  let totalBytes=0
+  for(const item of metadata){
+    const archivePath=String(item.archive_path||''),reservationId=Number(item.reservation_id),originalName=String(item.original_name||'ticket.pdf').replace(/[\\/]/g,'_')
+    if(!archivePath||archivePath.startsWith('/')||archivePath.split(/[\\/]/).includes('..')||seenPaths.has(archivePath)||!reservationIds.has(reservationId))throw new ApiError('PDF 附件清单包含无效关联或路径')
+    seenPaths.add(archivePath)
+    const archived=zip.file(archivePath);if(!archived)throw new ApiError(`ZIP 中缺少附件：${originalName}`)
+    const data=await archived.async('arraybuffer');totalBytes+=data.byteLength
+    if(data.byteLength>MAX_PDF_BYTES)throw new ApiError(`PDF 文件不能超过 15 MB：${originalName}`,413)
+    if(totalBytes>MAX_ARCHIVE_CONTENT_BYTES)throw new ApiError('ZIP 解压后的内容过大',413)
+    const signature=new TextDecoder().decode(data.slice(0,5));if(!signature.startsWith('%PDF-'))throw new ApiError(`附件不是有效 PDF：${originalName}`)
+    attachments.push({id:Number(item.id),reservation_id:reservationId,original_name:originalName,mime_type:'application/pdf',size_bytes:data.byteLength,uploaded_at:String(item.uploaded_at||new Date().toISOString()),data})
   }
+  await replaceDatabase(manifest,attachments)
   return {message:'导入成功',counts:{trips:(manifest.trips||[]).length,attachments:attachments.length}}
 }
 

@@ -7,6 +7,7 @@ web/backend/travel_planner.db
 web/backend/uploads/
 web/backend/tests/test_travel.db
 app/desktop-dist/
+app/android/app/release.keystore
 *.pyc
 .DS_Store
 .env
